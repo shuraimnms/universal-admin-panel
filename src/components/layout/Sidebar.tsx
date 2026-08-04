@@ -127,6 +127,15 @@ const Sidebar = ({ isOpen, onToggle }: SidebarProps) => {
           { href: '/admin/settings/api-keys', label: 'API Keys', icon: Key },
         ]
       });
+      authenticatedSections.push({
+        title: 'Crossref DOI',
+        items: [
+          { href: '/admin/crossref/dashboard', label: 'DOI Dashboard', icon: BarChart3 },
+          { href: '/admin/crossref/queue', label: 'Deposit Queue', icon: Send },
+          { href: '/admin/crossref/history', label: 'Deposit History', icon: Archive },
+          { href: '/admin/crossref/settings', label: 'DOI Settings', icon: Settings },
+        ]
+      });
     }
 
     if (session.user.role === 'STUDENT') {

@@ -17,6 +17,12 @@ export default function ViewPaperPage({ params }: { params: { id: string } }) {
   const [indexingStatus, setIndexingStatus] = useState<string | null>(null);
   const [isCheckingPlagiarism, setIsCheckingPlagiarism] = useState(false);
   const [isIndexing, setIsIndexing] = useState(false);
+  
+  // Crossref states
+  const [crossrefStatus, setCrossrefStatus] = useState<'READY'|'WARNINGS'|'ERRORS'|null>(null);
+  const [isGeneratingDoi, setIsGeneratingDoi] = useState(false);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [isValidating, setIsValidating] = useState(false);
 
   useEffect(() => {
     fetchPaper();
@@ -88,6 +94,65 @@ export default function ViewPaperPage({ params }: { params: { id: string } }) {
       setIsIndexing(false);
     }, 2000);
   };
+
+  const handleValidateCrossref = async () => {
+    setIsValidating(true);
+    try {
+      const res = await fetch(`/api/admin/crossref/validate?paperId=${params.id}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCrossrefStatus(data.validation.status);
+      if (data.validation.errors.length) {
+        alert("Errors:\n" + data.validation.errors.join('\n'));
+      } else if (data.validation.warnings.length) {
+        alert("Warnings:\n" + data.validation.warnings.join('\n'));
+      } else {
+        alert("Metadata is valid for Crossref!");
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleGenerateDoi = async () => {
+    setIsGeneratingDoi(true);
+    try {
+      const res = await fetch(`/api/admin/crossref/generate-doi`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId: params.id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDoi(data.doi);
+      fetchPaper();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsGeneratingDoi(false);
+    }
+  };
+
+  const handleDepositCrossref = async () => {
+    setIsDepositing(true);
+    try {
+      const res = await fetch(`/api/admin/crossref/deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paperId: params.id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      alert('Paper added to Crossref Deposit Queue successfully!');
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsDepositing(false);
+    }
+  };
+
 
   if (loading) return <div className="p-8 text-white">Loading...</div>;
   if (error) return <div className="p-8 text-red-400">Error: {error}</div>;
@@ -245,20 +310,48 @@ export default function ViewPaperPage({ params }: { params: { id: string } }) {
             {/* CrossRef Registration */}
             <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
               <div className="flex justify-between items-start">
-                <h3 className="font-medium text-slate-300">CrossRef DOI</h3>
+                <h3 className="font-medium text-slate-300">CrossRef Management</h3>
                 <span className={`text-xs px-2 py-1 rounded ${doi ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
-                  {doi ? 'Registered' : 'Pending'}
+                  {doi ? 'DOI Assigned' : 'Pending'}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Automatically generate and register a DOI using the Production CrossRef API.</p>
-              <button
-                onClick={() => {
-                  setDoi(`10.1234/ijarcm.${new Date().getFullYear()}.${Math.floor(Math.random() * 9000) + 1000}`);
-                }}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-              >
-                Auto-Generate DOI
-              </button>
+              <p className="text-xs text-slate-400">Validate metadata and deposit to Crossref.</p>
+              <div className="space-y-2">
+                {!doi ? (
+                  <button
+                    onClick={handleGenerateDoi}
+                    disabled={isGeneratingDoi}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isGeneratingDoi ? 'Generating...' : 'Auto-Generate DOI'}
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleValidateCrossref}
+                      disabled={isValidating}
+                      className="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isValidating ? 'Validating...' : 'Validate Metadata'}
+                    </button>
+                    <button
+                      onClick={handleDepositCrossref}
+                      disabled={isDepositing || crossrefStatus === 'ERRORS'}
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isDepositing ? 'Depositing...' : 'Deposit to Crossref'}
+                    </button>
+                    <a
+                      href={`/api/admin/crossref/xml?paperId=${params.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center w-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg transition-colors"
+                    >
+                      Preview XML
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Google Scholar */}
