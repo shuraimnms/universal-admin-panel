@@ -98,6 +98,30 @@ export default function SettingsPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Crossref Settings */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2.5 bg-rose-500/10 rounded-xl text-rose-400">
+                <Globe className="h-5 w-5" />
+              </div>
+              <h2 className="text-lg font-semibold text-white">Crossref Integration</h2>
+            </div>
+            <p className="text-sm text-slate-400 mb-6">
+              Manage your publisher credentials, journal configurations, and automated DOI deposit settings for Crossref.
+            </p>
+          </div>
+          
+          <div className="pt-2">
+            <a 
+              href="/admin/crossref/settings"
+              className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition-colors border border-slate-700 w-full font-bold shadow-lg"
+            >
+              Configure Crossref ➔
+            </a>
+          </div>
+        </div>
+
         {/* Maintenance Mode */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-6">

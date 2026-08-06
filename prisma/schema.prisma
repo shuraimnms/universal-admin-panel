@@ -30,26 +30,26 @@ model User {
   advertisements      Advertisement[]    @relation("AdCreator")
   announcements       Announcement[]     @relation("AnnouncementCreator")
   bookmarks           Bookmark[]
-  revokedCertificates Certificate[]      @relation("CertificateRevoker")
   certificates        Certificate[]      @relation("UserCertificates")
+  revokedCertificates Certificate[]      @relation("CertificateRevoker")
   conferences         Conference[]       @relation("ConferenceCreator")
+  crossrefDeposits    CrossrefDeposit[]
+  crossrefLogs        CrossrefLog[]
   downloads           Download[]
   ebook_purchases     ebook_purchases[]
   ebook_views         ebook_views[]
   ebooks              ebook[]
+  impactFactors       ImpactFactor[]     @relation("ImpactFactorCreator")
   paperAuthors        PaperAuthor[]
   submittedPapers     Paper[]            @relation("PaperSubmitter")
   plagiarismChecks    PlagiarismCheck[]  @relation("PlagiarismChecker")
-  assignedReviews     ReviewAssignment[] @relation("AssignedByUser")
   reviewerAssignments ReviewAssignment[] @relation("ReviewerAssignments")
+  assignedReviews     ReviewAssignment[] @relation("AssignedByUser")
   reviews             Review[]
   sessions            Session[]
   supportTickets      SupportTicket[]
   ticketReplies       TicketReply[]
-  impactFactors       ImpactFactor[]     @relation("ImpactFactorCreator")
   siteAccess          UserSiteAccess[]
-  crossrefDeposits    CrossrefDeposit[]
-  crossrefLogs        CrossrefLog[]
 
   @@index([email])
   @@index([role])
@@ -68,10 +68,9 @@ model Issue {
   isPublished Boolean  @default(false) @map("is_published")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  siteId      String?  @map("site_id")
+  site        Site?    @relation(fields: [siteId], references: [id])
   papers      Paper[]
-
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
 
   @@unique([volume, issueNumber])
   @@index([siteId])
@@ -82,45 +81,43 @@ model Issue {
 }
 
 model Paper {
-  id                String             @id @default(uuid())
-  title             String
-  abstract          String
-  keywords          String?
-  filePath          String             @map("file_path")
-  status            String             @default("SUBMITTED")
-  category          String?
-  submittedAt       DateTime           @default(now()) @map("submitted_at")
-  publishedAt       DateTime?          @map("published_at")
-  submitterId       String             @map("submitter_id")
-  coverImage        String?            @map("cover_image")
-  issueNumber       String?            @map("issue_number")
-  publicationDate   DateTime?          @map("publication_date")
-  uniqueNumber      String?            @map("unique_number")
-  volumeNumber      String?            @map("volume_number")
-  issueId           String?            @map("issue_id")
-  doi               String?
-  doiStatus         String?            @default("PENDING") @map("doi_status")
-  doiRegisteredAt   DateTime?          @map("doi_registered_at")
-  crossrefMetadata  String?            @map("crossref_metadata")
-  scribdUrl         String?            @map("scribd_url")
-  archivePapers     ArchivePaper[]
-  bookmarks         Bookmark[]
-  certificates      Certificate[]
-  citations         Citation[]
-  downloads         Download[]
-  paperAuthors      PaperAuthor[]
-  issue             Issue?             @relation(fields: [issueId], references: [id])
-  submitter         User               @relation("PaperSubmitter", fields: [submitterId], references: [id])
-  plagiarismChecks  PlagiarismCheck[]
-  reviewAssignments ReviewAssignment[]
-  reviews           Review[]
-  paperContent      PaperContent?
-
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
-  
+  id                  String               @id @default(uuid())
+  title               String
+  abstract            String
+  keywords            String?
+  filePath            String               @map("file_path")
+  status              String               @default("SUBMITTED")
+  category            String?
+  submittedAt         DateTime             @default(now()) @map("submitted_at")
+  publishedAt         DateTime?            @map("published_at")
+  submitterId         String               @map("submitter_id")
+  coverImage          String?              @map("cover_image")
+  issueNumber         String?              @map("issue_number")
+  publicationDate     DateTime?            @map("publication_date")
+  uniqueNumber        String?              @map("unique_number")
+  volumeNumber        String?              @map("volume_number")
+  issueId             String?              @map("issue_id")
+  doi                 String?
+  doiStatus           String?              @default("PENDING") @map("doi_status")
+  doiRegisteredAt     DateTime?            @map("doi_registered_at")
+  crossrefMetadata    String?              @map("crossref_metadata")
+  scribdUrl           String?              @map("scribd_url")
+  siteId              String?              @map("site_id")
+  archivePapers       ArchivePaper[]
+  bookmarks           Bookmark[]
+  certificates        Certificate[]
+  citations           Citation[]
   crossrefDeposit     CrossrefDeposit?
   crossrefXmlVersions CrossrefXmlVersion[]
+  downloads           Download[]
+  paperAuthors        PaperAuthor[]
+  paperContent        PaperContent?
+  site                Site?                @relation(fields: [siteId], references: [id])
+  submitter           User                 @relation("PaperSubmitter", fields: [submitterId], references: [id])
+  issue               Issue?               @relation(fields: [issueId], references: [id])
+  plagiarismChecks    PlagiarismCheck[]
+  reviewAssignments   ReviewAssignment[]
+  reviews             Review[]
 
   @@index([siteId])
   @@index([submitterId])
@@ -146,8 +143,8 @@ model Review {
   recommendation String
   submittedAt    DateTime? @map("submitted_at")
   deadline       DateTime
-  paper          Paper     @relation(fields: [paperId], references: [id])
   reviewer       User      @relation(fields: [reviewerId], references: [id])
+  paper          Paper     @relation(fields: [paperId], references: [id])
 
   @@index([paperId])
   @@index([reviewerId])
@@ -164,9 +161,9 @@ model ReviewAssignment {
   dueDate      DateTime  @map("due_date")
   status       String    @default("ASSIGNED")
   completedAt  DateTime? @map("completed_at")
-  assignedBy   User      @relation("AssignedByUser", fields: [assignedById], references: [id])
-  paper        Paper     @relation(fields: [paperId], references: [id])
   reviewer     User      @relation("ReviewerAssignments", fields: [reviewerId], references: [id])
+  paper        Paper     @relation(fields: [paperId], references: [id])
+  assignedBy   User      @relation("AssignedByUser", fields: [assignedById], references: [id])
 
   @@unique([paperId, reviewerId])
   @@index([paperId])
@@ -182,8 +179,8 @@ model PaperAuthor {
   userId          String  @map("user_id")
   authorOrder     Int     @map("author_order")
   isCorresponding Boolean @default(false) @map("is_corresponding")
-  paper           Paper   @relation(fields: [paperId], references: [id])
   user            User    @relation(fields: [userId], references: [id])
+  paper           Paper   @relation(fields: [paperId], references: [id])
 
   @@unique([paperId, authorOrder])
   @@index([paperId])
@@ -197,8 +194,8 @@ model Download {
   userId       String?  @map("user_id")
   downloadedAt DateTime @default(now()) @map("downloaded_at")
   ipAddress    String?  @map("ip_address")
-  paper        Paper    @relation(fields: [paperId], references: [id])
   user         User?    @relation(fields: [userId], references: [id])
+  paper        Paper    @relation(fields: [paperId], references: [id])
 
   @@index([paperId])
   @@index([userId])
@@ -211,8 +208,8 @@ model Bookmark {
   paperId   String   @map("paper_id")
   userId    String   @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
-  paper     Paper    @relation(fields: [paperId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
+  paper     Paper    @relation(fields: [paperId], references: [id])
 
   @@unique([paperId, userId])
   @@index([paperId])
@@ -270,7 +267,7 @@ model PaperContent {
   discussion       String?
   conclusion       String?
   references       String?
-  images           String? // Store array of image URLs and their metadata
+  images           String?
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
   paper            Paper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
@@ -294,10 +291,9 @@ model Conference {
   updatedAt   DateTime @updatedAt @map("updated_at")
   createdBy   String   @map("created_by")
   videoUrl    String?  @map("video_url")
+  siteId      String?  @map("site_id")
+  site        Site?    @relation(fields: [siteId], references: [id])
   creator     User     @relation("ConferenceCreator", fields: [createdBy], references: [id])
-
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
 
   @@index([siteId])
   @@index([startDate])
@@ -317,8 +313,8 @@ model PlagiarismCheck {
   status      String   @default("PENDING")
   checkedAt   DateTime @default(now()) @map("checked_at")
   checkedBy   String?  @map("checked_by")
-  checker     User?    @relation("PlagiarismChecker", fields: [checkedBy], references: [id])
   paper       Paper    @relation(fields: [paperId], references: [id])
+  checker     User?    @relation("PlagiarismChecker", fields: [checkedBy], references: [id])
 
   @@index([paperId])
   @@index([status])
@@ -365,10 +361,9 @@ model Announcement {
   updatedAt      DateTime  @updatedAt @map("updated_at")
   createdBy      String    @map("created_by")
   targetAudience String    @default("ALL") @map("target_audience")
+  siteId         String?   @map("site_id")
+  site           Site?     @relation(fields: [siteId], references: [id])
   creator        User      @relation("AnnouncementCreator", fields: [createdBy], references: [id])
-
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
 
   @@index([siteId])
   @@index([isPublished])
@@ -419,9 +414,9 @@ model Certificate {
   isValid           Boolean   @default(true) @map("is_valid")
   revokedAt         DateTime? @map("revoked_at")
   revokedBy         String?   @map("revoked_by")
-  paper             Paper?    @relation(fields: [paperId], references: [id])
-  revoker           User?     @relation("CertificateRevoker", fields: [revokedBy], references: [id])
   user              User?     @relation("UserCertificates", fields: [userId], references: [id])
+  revoker           User?     @relation("CertificateRevoker", fields: [revokedBy], references: [id])
+  paper             Paper?    @relation(fields: [paperId], references: [id])
 
   @@index([paperId])
   @@index([userId])
@@ -614,8 +609,8 @@ model ArchivePaper {
   pageStart Int?     @map("page_start")
   pageEnd   Int?     @map("page_end")
   createdAt DateTime @default(now()) @map("created_at")
-  archive   Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
   paper     Paper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  archive   Archive  @relation(fields: [archiveId], references: [id], onDelete: Cascade)
 
   @@unique([archiveId, paperId])
   @@index([archiveId])
@@ -696,8 +691,8 @@ model TicketReply {
   message    String
   isInternal Boolean       @default(false) @map("is_internal")
   createdAt  DateTime      @default(now()) @map("created_at")
-  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   user       User          @relation(fields: [userId], references: [id])
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId])
   @@index([userId])
@@ -725,12 +720,11 @@ model ebook {
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
   created_by      String
+  siteId          String?           @map("site_id")
   ebook_purchases ebook_purchases[]
   ebook_views     ebook_views[]
+  site            Site?             @relation(fields: [siteId], references: [id])
   users           User              @relation(fields: [created_by], references: [id])
-
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
 
   @@index([siteId])
   @@index([category])
@@ -751,8 +745,8 @@ model ebook_purchases {
   payment_id   String?
   purchased_at DateTime  @default(now())
   expires_at   DateTime?
-  ebooks       ebook     @relation(fields: [ebook_id], references: [id], onDelete: Cascade)
   users        User      @relation(fields: [user_id], references: [id])
+  ebooks       ebook     @relation(fields: [ebook_id], references: [id], onDelete: Cascade)
 
   @@unique([ebook_id, user_id])
   @@index([ebook_id])
@@ -769,8 +763,8 @@ model ebook_views {
   page_viewed Int
   viewed_at   DateTime @default(now())
   session_id  String?
-  ebooks      ebook    @relation(fields: [ebook_id], references: [id], onDelete: Cascade)
   users       User?    @relation(fields: [user_id], references: [id])
+  ebooks      ebook    @relation(fields: [ebook_id], references: [id], onDelete: Cascade)
 
   @@index([ebook_id])
   @@index([session_id])
@@ -780,19 +774,17 @@ model ebook_views {
 
 model ImpactFactor {
   id              String   @id @default(uuid())
-  year            Int
+  year            Int      @unique
   value           Float
   certificatePath String?  @map("certificate_path")
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   createdBy       String   @map("created_by")
+  siteId          String?  @map("site_id")
+  site            Site?    @relation(fields: [siteId], references: [id])
   creator         User     @relation("ImpactFactorCreator", fields: [createdBy], references: [id])
 
-  siteId String? @map("site_id")
-  site   Site?   @relation(fields: [siteId], references: [id])
-
-  @@unique([year])
   @@index([siteId])
   @@index([year])
   @@index([isActive])
@@ -838,23 +830,22 @@ model TeamMember {
 }
 
 model Site {
-  id           String   @id @default(uuid())
-  name         String
-  domain       String?
-  abbreviation String
-  isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  users         UserSiteAccess[]
-  papers        Paper[]
-  issues        Issue[]
-  announcements Announcement[]
-  conferences   Conference[]
-  ebooks        ebook[]
-  impactFactors ImpactFactor[]
-  crossrefJournalSettings CrossrefJournalSettings?
+  id                      String                   @id @default(uuid())
+  name                    String
+  domain                  String?
+  abbreviation            String
+  isActive                Boolean                  @default(true) @map("is_active")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  announcements           Announcement[]
+  conferences             Conference[]
   crossrefDeposits        CrossrefDeposit[]
+  crossrefJournalSettings CrossrefJournalSettings?
+  ebooks                  ebook[]
+  impactFactors           ImpactFactor[]
+  issues                  Issue[]
+  papers                  Paper[]
+  users                   UserSiteAccess[]
 
   @@map("sites")
 }
@@ -863,11 +854,11 @@ model UserSiteAccess {
   id        String   @id @default(uuid())
   userId    String   @map("user_id")
   siteId    String   @map("site_id")
-  role      String // e.g. EDITOR, ADMIN for this specific site
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  role      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, siteId])
   @@index([userId])
@@ -879,7 +870,7 @@ model ApiKey {
   id        String   @id @default(uuid())
   name      String
   key       String   @unique
-  provider  String // e.g., 'sendgrid', 'stripe', 'aws'
+  provider  String
   isActive  Boolean  @default(true) @map("is_active")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -900,8 +891,8 @@ model ServiceRequest {
   pubType       String
   title         String
   targetJournal String?
-  description   String @default("")
-  status        String @default("PENDING")
+  description   String   @default("")
+  status        String   @default("PENDING")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -930,7 +921,6 @@ model CrossrefSettings {
 model CrossrefJournalSettings {
   id                   String   @id @default(uuid())
   siteId               String   @unique @map("site_id")
-  site                 Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
   journalName          String   @map("journal_name")
   shortName            String   @map("short_name")
   issn                 String?
@@ -948,29 +938,29 @@ model CrossrefJournalSettings {
   peerReview           String?  @map("peer_review")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
+  site                 Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@map("crossref_journal_settings")
 }
 
 model CrossrefDeposit {
-  id               String    @id @default(uuid())
-  paperId          String    @unique @map("paper_id")
-  siteId           String    @map("site_id")
+  id               String        @id @default(uuid())
+  paperId          String        @unique @map("paper_id")
+  siteId           String        @map("site_id")
   doi              String
-  status           String    @default("READY")
-  queueId          String?   @map("queue_id")
-  xmlVersionId     String?   @map("xml_version_id")
-  crossrefResponse String?   @map("crossref_response")
-  retryCount       Int       @default(0) @map("retry_count")
-  operatorId       String?   @map("operator_id")
-  submissionTime   DateTime? @map("submission_time")
-  completionTime   DateTime? @map("completion_time")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  
-  paper            Paper     @relation(fields: [paperId], references: [id], onDelete: Cascade)
-  site             Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  operator         User?     @relation(fields: [operatorId], references: [id])
+  status           String        @default("READY")
+  queueId          String?       @map("queue_id")
+  xmlVersionId     String?       @map("xml_version_id")
+  crossrefResponse String?       @map("crossref_response")
+  retryCount       Int           @default(0) @map("retry_count")
+  operatorId       String?       @map("operator_id")
+  submissionTime   DateTime?     @map("submission_time")
+  completionTime   DateTime?     @map("completion_time")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  operator         User?         @relation(fields: [operatorId], references: [id])
+  site             Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  paper            Paper         @relation(fields: [paperId], references: [id], onDelete: Cascade)
   logs             CrossrefLog[]
 
   @@index([status])
@@ -980,16 +970,15 @@ model CrossrefDeposit {
 }
 
 model CrossrefLog {
-  id         String   @id @default(uuid())
-  depositId  String   @map("deposit_id")
+  id         String          @id @default(uuid())
+  depositId  String          @map("deposit_id")
   action     String
   details    String?
   status     String
-  operatorId String?  @map("operator_id")
-  createdAt  DateTime @default(now()) @map("created_at")
-  
-  deposit    CrossrefDeposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  operatorId String?         @map("operator_id")
+  createdAt  DateTime        @default(now()) @map("created_at")
   operator   User?           @relation(fields: [operatorId], references: [id])
+  deposit    CrossrefDeposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
 
   @@index([depositId])
   @@index([createdAt])
@@ -1002,7 +991,6 @@ model CrossrefXmlVersion {
   version   Int
   xmlData   String   @map("xml_data")
   createdAt DateTime @default(now()) @map("created_at")
-  
   paper     Paper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
 
   @@index([paperId])

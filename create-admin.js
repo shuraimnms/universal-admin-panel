@@ -1,47 +1,38 @@
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
+
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@va-ra.co';
-  const password = 'Admin@123456';
-  const hash = await bcrypt.hash(password, 12);
+  const email = 'admin@va-ra.com';
+  const password = 'admin@123';
+  const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-      role: 'ADMIN',
-      isVerified: true,
-      isBanned: false,
-      passwordHash: hash,
+      passwordHash: hashedPassword,
+      role: 'SUPERADMIN',
+      isVerified: true, // MUST BE TRUE to login
     },
     create: {
       email,
-      firstName: 'Super',
-      lastName: 'Admin',
-      passwordHash: hash,
-      role: 'ADMIN',
-      isVerified: true,
-      isBanned: false,
-      institution: 'IJARCM',
+      passwordHash: hashedPassword,
+      firstName: 'Admin',
+      lastName: 'User',
+      role: 'SUPERADMIN',
+      isVerified: true, // MUST BE TRUE to login
     },
   });
 
-  console.log('');
-  console.log('✅ SUCCESS: Admin user is ready!');
-  console.log('─────────────────────────────');
-  console.log('Email   :', user.email);
-  console.log('Role    :', user.role);
-  console.log('Verified:', user.isVerified);
-  console.log('Password: Admin@123456');
-  console.log('─────────────────────────────');
-  console.log('Login at: http://localhost:3003/auth/login');
-  console.log('');
-
-  await prisma.$disconnect();
+  console.log('User created/updated and verified:', user.email);
 }
 
-main().catch(e => {
-  console.error('ERROR:', e.message);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

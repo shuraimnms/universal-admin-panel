@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { validateCrossrefMetadata } from '@/lib/crossref/validator';
+import { generateCrossrefXML } from '@/lib/crossref/xml-generator';
 
 export async function POST(req: Request) {
   try {
@@ -41,6 +42,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Validation failed', validation }, { status: 400 });
     }
 
+    const xmlContent = generateCrossrefXML(paper, settings, journalSettings);
+
+    const latestVersion = await prisma.crossrefXmlVersion.findFirst({
+      where: { paperId: paper.id },
+      orderBy: { version: 'desc' }
+    });
+    
+    const newVersionNum = latestVersion ? latestVersion.version + 1 : 1;
+
+    const xmlRecord = await prisma.crossrefXmlVersion.create({
+      data: {
+        paperId: paper.id,
+        version: newVersionNum,
+        xmlData: xmlContent
+      }
+    });
+
     // Create or update deposit record in queue
     const deposit = await prisma.crossrefDeposit.upsert({
       where: { paperId: paper.id },
@@ -48,7 +66,8 @@ export async function POST(req: Request) {
         status: 'WAITING',
         operatorId: session.user.id,
         submissionTime: new Date(),
-        retryCount: 0 // Reset retries on manual deposit
+        retryCount: 0, // Reset retries on manual deposit
+        xmlVersionId: xmlRecord.id
       },
       create: {
         paperId: paper.id,
@@ -56,7 +75,8 @@ export async function POST(req: Request) {
         doi: paper.doi!,
         status: 'WAITING',
         operatorId: session.user.id,
-        submissionTime: new Date()
+        submissionTime: new Date(),
+        xmlVersionId: xmlRecord.id
       }
     });
 
