@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  url       = "postgresql://postgres:admin%40va-ra%4012@db.kkecypefhdwioqejjvof.supabase.co:5432/postgres"
+  directUrl = "postgresql://postgres:admin%40va-ra%4012@db.kkecypefhdwioqejjvof.supabase.co:5432/postgres"
 }
 
 model User {
