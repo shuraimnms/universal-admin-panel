@@ -234,7 +234,7 @@ model Account {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
-  @@index([userId], map: "accounts_user_id_fkey")
+  @@index([userId])
   @@map("accounts")
 }
 
@@ -245,7 +245,7 @@ model Session {
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId], map: "sessions_user_id_fkey")
+  @@index([userId])
   @@map("sessions")
 }
 
@@ -301,7 +301,7 @@ model Conference {
   @@index([endDate])
   @@index([status])
   @@index([isPublic])
-  @@index([createdBy], map: "conferences_created_by_fkey")
+  @@index([createdBy])
   @@map("conferences")
 }
 
@@ -319,7 +319,7 @@ model PlagiarismCheck {
 
   @@index([paperId])
   @@index([status])
-  @@index([checkedBy], map: "plagiarism_checks_checked_by_fkey")
+  @@index([checkedBy])
   @@map("plagiarism_checks")
 }
 
@@ -345,7 +345,7 @@ model Advertisement {
   @@index([priority])
   @@index([startDate])
   @@index([endDate])
-  @@index([createdBy], map: "advertisements_created_by_fkey")
+  @@index([createdBy])
   @@map("advertisements")
 }
 
@@ -373,7 +373,7 @@ model Announcement {
   @@index([targetAudience])
   @@index([publishedAt])
   @@index([expiresAt])
-  @@index([createdBy], map: "announcements_created_by_fkey")
+  @@index([createdBy])
   @@map("announcements")
 }
 
@@ -425,7 +425,7 @@ model Certificate {
   @@index([type])
   @@index([issuedAt])
   @@index([isValid])
-  @@index([revokedBy], map: "certificates_revoked_by_fkey")
+  @@index([revokedBy])
   @@map("certificates")
 }
 
