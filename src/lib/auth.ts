@@ -84,20 +84,6 @@ export const authOptions: NextAuthOptions = {
   },
   jwt: {
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    encode: async ({ token, secret }) => {
-      console.log('JWT: Encoding token for user:', token?.sub);
-      return encode({ token, secret });
-    },
-    decode: async ({ token, secret }) => {
-      try {
-        const decoded = await decode({ token, secret });
-        console.log('JWT: Successfully decoded token for user:', decoded?.sub);
-        return decoded;
-      } catch (error) {
-        console.error('JWT: Failed to decode token:', error);
-        return null;
-      }
-    },
   },
   callbacks: {
     async jwt({ token, user, trigger }) {
