@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { readFile } from 'fs/promises';
@@ -118,4 +119,3 @@ export async function GET(
   }
 }
 
-export const dynamic = 'force-dynamic';

@@ -4,7 +4,6 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export const dynamic = 'force-dynamic';
 
 // GET - Get active announcements for public display
 export async function GET(request: NextRequest) {

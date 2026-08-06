@@ -9,7 +9,6 @@ import { existsSync } from 'fs';
 import { generateScopusPDF } from '@/lib/generateScopusPDF';
 import { revalidatePath } from 'next/cache';
 
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
