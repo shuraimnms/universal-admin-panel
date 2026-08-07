@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = "postgresql://postgres:admin%40va-ra12@db.kkecypefhdwioqejjvof.supabase.co:6543/postgres?pgbouncer=true"
+  url       = "postgresql://postgres:admin%40va-ra12@db.kkecypefhdwioqejjvof.supabase.co:5432/postgres"
   directUrl = "postgresql://postgres:admin%40va-ra12@db.kkecypefhdwioqejjvof.supabase.co:5432/postgres"
 }
 
@@ -73,7 +73,7 @@ model Issue {
   site        Site?    @relation(fields: [siteId], references: [id])
   papers      Paper[]
 
-  @@unique([volume, issueNumber])
+  @@unique([siteId, volume, issueNumber])
   @@index([siteId])
   @@index([year])
   @@index([publishDate])

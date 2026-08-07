@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+const { randomUUID } = require('crypto');
 const prisma = new PrismaClient();
 
 const siteAbbreviations = [
@@ -21,7 +22,7 @@ function randomUni() {
 }
 
 async function seed() {
-  console.log("Starting DB seeding...");
+  console.log("Starting DB seeding (Batched)...");
 
   // Create a default submitter user
   let submitter = await prisma.user.findFirst({ where: { email: 'admin@system.local' } });
@@ -37,6 +38,11 @@ async function seed() {
     });
   }
   
+  const issuesToInsert = [];
+  const papersToInsert = [];
+  const usersToInsert = [];
+  const paperAuthorsToInsert = [];
+
   // 1. Ensure all sites exist
   for (const abbr of siteAbbreviations) {
     let site = await prisma.site.findFirst({
@@ -52,11 +58,10 @@ async function seed() {
         }
       });
       console.log(`Created site ${abbr}`);
-    } else {
-      console.log(`Site ${abbr} already exists`);
     }
 
-    // 2. Seed Issues (Volume 1 to Volume 12, Issue 1 to 4) for this site
+    console.log(`Preparing data for ${abbr}...`);
+    // 2. Prepare Issues and Papers (Volume 1 to Volume 12, Issue 1 to 4) for this site
     // 2015 to 2026
     for (let year = 2015; year <= 2026; year++) {
       const volume = year - 2014;
@@ -65,87 +70,85 @@ async function seed() {
         if (year === 2026 && issueNum > 3) continue;
 
         const title = `Volume ${volume}, Issue ${issueNum}`;
-        const isCurrent = (year === 2026 && issueNum === 3);
+        const issueId = randomUUID();
 
-        let issue = await prisma.issue.findFirst({
-          where: {
-            siteId: site.id,
-            volume: volume.toString(),
-            issueNumber: issueNum.toString()
-          }
+        issuesToInsert.push({
+          id: issueId,
+          siteId: site.id,
+          title: title,
+          volume: volume.toString(),
+          issueNumber: issueNum.toString(),
+          year: year,
+          isPublished: true,
+          publishDate: new Date(year, (issueNum - 1) * 3, 1),
         });
 
-        if (!issue) {
-          issue = await prisma.issue.create({
-            data: {
-              siteId: site.id,
-              title: title,
-              volume: volume.toString(),
-              issueNumber: issueNum.toString(),
-              year: year,
-              isPublished: true,
-              publishDate: new Date(year, (issueNum - 1) * 3, 1),
-            }
-          });
-        }
-
-        // 3. Seed 2 Papers for each issue
+        // 3. Prepare 2 Papers for each issue
         for (let p = 1; p <= 2; p++) {
           const paperTitle = `Research on Advanced Methodologies in ${abbr}: A Case Study ${volume}-${issueNum}-${p}`;
           const uniqueNumber = `${abbr.toLowerCase()}-${year}-${volume}-${issueNum}-${p}`;
+          const paperId = randomUUID();
+          const authorUserId = randomUUID();
           
-          let paper = await prisma.paper.findFirst({
-            where: {
-              siteId: site.id,
-              title: paperTitle
-            }
+          usersToInsert.push({
+            id: authorUserId,
+            email: `author_${uniqueNumber}@example.com`,
+            firstName: firstNames[Math.floor(Math.random() * firstNames.length)],
+            lastName: lastNames[Math.floor(Math.random() * lastNames.length)],
+            passwordHash: 'dummy',
+            role: 'AUTHOR',
+            institution: randomUni(),
           });
 
-          if (!paper) {
-            // Create author user
-            const authorUser = await prisma.user.create({
-              data: {
-                email: `author_${uniqueNumber}@example.com`,
-                firstName: firstNames[Math.floor(Math.random() * firstNames.length)],
-                lastName: lastNames[Math.floor(Math.random() * lastNames.length)],
-                passwordHash: 'dummy',
-                role: 'AUTHOR',
-                institution: randomUni(),
-              }
-            });
+          papersToInsert.push({
+            id: paperId,
+            siteId: site.id,
+            title: paperTitle,
+            abstract: "This is a detailed placeholder abstract for the research paper. It explores various aspects of the topic and provides significant insights into the latest developments in the field.",
+            status: "PUBLISHED",
+            category: "RESEARCH_ARTICLE",
+            issueId: issueId,
+            issueNumber: issueNum.toString(),
+            volumeNumber: volume.toString(),
+            uniqueNumber: uniqueNumber,
+            doi: `10.1000/${uniqueNumber}`,
+            filePath: "#",
+            submitterId: submitter.id,
+            submittedAt: new Date(year, (issueNum - 1) * 3 - 1, 1),
+            publishedAt: new Date(year, (issueNum - 1) * 3, 1),
+            publicationDate: new Date(year, (issueNum - 1) * 3, 1),
+          });
 
-            paper = await prisma.paper.create({
-              data: {
-                siteId: site.id,
-                title: paperTitle,
-                abstract: "This is a detailed placeholder abstract for the research paper. It explores various aspects of the topic and provides significant insights into the latest developments in the field.",
-                status: "PUBLISHED",
-                category: "RESEARCH_ARTICLE",
-                issueId: issue.id,
-                issueNumber: issueNum.toString(),
-                volumeNumber: volume.toString(),
-                uniqueNumber: uniqueNumber,
-                doi: `10.1000/${uniqueNumber}`,
-                filePath: "#",
-                submitterId: submitter.id,
-                submittedAt: new Date(year, (issueNum - 1) * 3 - 1, 1),
-                publishedAt: new Date(year, (issueNum - 1) * 3, 1),
-                publicationDate: new Date(year, (issueNum - 1) * 3, 1),
-                paperAuthors: {
-                  create: [
-                    {
-                      authorOrder: 1,
-                      isCorresponding: true,
-                      userId: authorUser.id
-                    }
-                  ]
-                }
-              }
-            });
-          }
+          paperAuthorsToInsert.push({
+            id: randomUUID(),
+            paperId: paperId,
+            userId: authorUserId,
+            authorOrder: 1,
+            isCorresponding: true
+          });
         }
       }
     }
+  }
+
+  console.log(`Generated ${issuesToInsert.length} issues, ${papersToInsert.length} papers in memory.`);
+
+  try {
+    console.log("Inserting users...");
+    await prisma.user.createMany({ data: usersToInsert, skipDuplicates: true });
+    
+    console.log("Inserting issues...");
+    await prisma.issue.createMany({ data: issuesToInsert, skipDuplicates: true });
+    
+    console.log("Inserting papers...");
+    await prisma.paper.createMany({ data: papersToInsert, skipDuplicates: true });
+    
+    console.log("Inserting paper authors...");
+    await prisma.paperAuthor.createMany({ data: paperAuthorsToInsert, skipDuplicates: true });
+    
+    console.log("Bulk inserts completed!");
+  } catch(e) {
+    console.error("Error during bulk insert:", e);
   }
 
   // Seed generic board members globally if none exist
