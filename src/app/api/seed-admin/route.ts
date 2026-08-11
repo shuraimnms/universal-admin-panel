@@ -14,7 +14,7 @@ export async function GET() {
       where: { email },
       update: {
         passwordHash: hashedPassword,
-        role: 'SUPERADMIN',
+        role: 'ADMIN',
         isVerified: true,
       },
       create: {
@@ -22,7 +22,7 @@ export async function GET() {
         passwordHash: hashedPassword,
         firstName: 'Admin',
         lastName: 'User',
-        role: 'SUPERADMIN',
+        role: 'ADMIN',
         isVerified: true,
       },
     });
