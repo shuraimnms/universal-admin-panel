@@ -70,7 +70,23 @@ export async function GET(request: NextRequest) {
     const { query, category, author, dateFrom, dateTo, sortBy, sortOrder, page, limit, issue_id, status } = validatedParams;
 
     // Build where clause
-    const where: Record<string, unknown> = {};
+    const where: Record<string, any> = {};
+    
+    const siteAbbreviation = request.headers.get('x-site-abbreviation');
+    if (siteAbbreviation) {
+      if (siteAbbreviation === 'global' || siteAbbreviation === 'null' || siteAbbreviation === 'VA-RA Global') {
+        where.siteId = null;
+      } else {
+        const site = await prisma.site.findFirst({
+          where: { abbreviation: siteAbbreviation }
+        });
+        if (site) {
+          where.siteId = site.id;
+        } else {
+          where.siteId = 'non-existent-site-id';
+        }
+      }
+    }
     if (status) {
       where.status = status.toUpperCase();
     } else {
