@@ -326,7 +326,7 @@ export async function POST(request: NextRequest) {
     let relativeFilePath: string;
 
     // Fetch issue details if issueId is provided
-    let issueData = null;
+    let issueData: any = null;
     if (issueId) {
       issueData = await prisma.issue.findUnique({
         where: { id: issueId },

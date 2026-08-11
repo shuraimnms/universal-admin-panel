@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       }>;
       category?: string;
       access_type?: 'PUBLIC' | 'LOGGED_IN_ONLY' | 'PAID';
-      siteId?: string;
+      siteId?: string | null;
     } = {};
 
     if (siteId) {

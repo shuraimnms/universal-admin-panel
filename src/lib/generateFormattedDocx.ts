@@ -243,7 +243,7 @@ export async function generateFormattedDocx(data: DocxData): Promise<Buffer> {
           }),
 
           new Paragraph({
-            alignment: AlignmentType.JUSTIFY,
+            alignment: AlignmentType.JUSTIFIED,
             spacing: { after: 120, line: 360 }, // 1.5 Line Spacing
             children: [
               new TextRun({
@@ -322,7 +322,7 @@ function createBodySection(title: string, text: string | undefined): Paragraph[]
   paragraphs.push(
     new Paragraph({
       spacing: { before: 360, after: 120 },
-      keepWithNext: true,
+      keepNext: true,
       children: [
         new TextRun({
           text: title,
@@ -354,7 +354,7 @@ function createBodySection(title: string, text: string | undefined): Paragraph[]
 
     paragraphs.push(
       new Paragraph({
-        alignment: AlignmentType.JUSTIFY,
+        alignment: AlignmentType.JUSTIFIED,
         spacing: { after: 120, line: 360 }, // 1.5 Spacing
         indent: { firstLine: 480 }, // Indent first line
         children: [
@@ -390,7 +390,7 @@ function parseMarkdownTable(tableText: string): Table | null {
           return new TableCell({
             children: [
               new Paragraph({
-                alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT,
+                alignment: isHeader ? AlignmentType.CENTER : AlignmentType.START,
                 children: [
                   new TextRun({
                     text: cell,

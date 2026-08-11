@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useSite } from '@/contexts/SiteContext';
 import { 
   ArrowLeft, Upload, FileText, Bot, RefreshCw, Eye, Download, 
-  Check, Play, Plus, Trash2, HelpCircle, FileDown, BookOpen
+  Check, Play, Plus, Trash2, HelpCircle, FileDown, BookOpen, ExternalLink
 } from 'lucide-react';
 import mammoth from 'mammoth';
 import { jsPDF } from 'jspdf';
@@ -317,7 +317,7 @@ export default function NewPaperPage() {
     });
 
     const blobUrl = doc.output('bloburl');
-    setPdfPreviewUrl(blobUrl);
+    setPdfPreviewUrl(blobUrl.toString());
     setShowPreviewModal(true);
   };
 

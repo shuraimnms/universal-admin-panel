@@ -53,6 +53,7 @@ async function runTests() {
     // Actually, generateDoi is an internal API. Let's just generate DOIs directly for all 100 papers
     // and verify pattern.
     for (const p of papers) {
+      if (!p.siteId) continue;
       const site = await prisma.site.findUnique({ where: { id: p.siteId } });
       const journalSettings = await prisma.crossrefJournalSettings.findUnique({ where: { siteId: p.siteId } });
       
@@ -119,7 +120,7 @@ async function runTests() {
     await prisma.crossrefDeposit.deleteMany({});
     
     // Insert 10 jobs
-    const jobs = [];
+    const jobs: any[] = [];
     for (let i = 0; i < 10; i++) {
       jobs.push({
         paperId: papers[i].id,

@@ -19,6 +19,7 @@ interface Paper {
   volumeNumber?: string;
   issueNumber?: string;
   doi?: string;
+  filePath?: string;
   paperAuthors: {
     user: {
       firstName: string;
