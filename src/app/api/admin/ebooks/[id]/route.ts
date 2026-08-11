@@ -3,10 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { unlink } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-
 
 export async function GET(
   request: NextRequest,
@@ -183,19 +182,27 @@ export async function DELETE(
       return NextResponse.json({ error: 'Ebook not found' }, { status: 404 });
     }
 
-    // Delete associated files
-    if (existingEbook.file_path) {
-      const pdfPath = join(process.cwd(), 'public', existingEbook.file_path);
-      if (existsSync(pdfPath)) {
-        await unlink(pdfPath);
+    // Delete associated files (wrapped in try/catch to avoid blocking database deletion)
+    try {
+      if (existingEbook.file_path && !existingEbook.file_path.startsWith('http')) {
+        const pdfPath = join(process.cwd(), 'public', existingEbook.file_path);
+        if (existsSync(pdfPath)) {
+          await unlink(pdfPath);
+        }
       }
+    } catch (err) {
+      console.error('Failed to delete physical PDF file:', err);
     }
 
-    if (existingEbook.coverImage) {
-      const coverPath = join(process.cwd(), 'public', existingEbook.coverImage);
-      if (existsSync(coverPath)) {
-        await unlink(coverPath);
+    try {
+      if (existingEbook.coverImage && !existingEbook.coverImage.startsWith('http')) {
+        const coverPath = join(process.cwd(), 'public', existingEbook.coverImage);
+        if (existsSync(coverPath)) {
+          await unlink(coverPath);
+        }
       }
+    } catch (err) {
+      console.error('Failed to delete physical cover image:', err);
     }
 
     // Delete ebook record (this will cascade delete related records)
