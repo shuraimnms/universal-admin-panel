@@ -37,9 +37,12 @@ export async function POST(request: NextRequest) {
     } else if (type === 'image') {
       uploadsDir = join(process.cwd(), 'public', 'uploads', 'images');
       urlPrefix = '/uploads/images';
+    } else if (type === 'ebook') {
+      uploadsDir = join(process.cwd(), 'public', 'uploads', 'ebooks');
+      urlPrefix = '/uploads/ebooks';
     } else {
       return NextResponse.json(
-        { error: 'Invalid upload type. Must be "resume" or "image"' },
+        { error: 'Invalid upload type. Must be "resume", "image", or "ebook"' },
         { status: 400 }
       );
     }
@@ -58,10 +61,10 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else if (type === 'resume') {
+    } else if (type === 'resume' || type === 'ebook') {
       if (file.type !== 'application/pdf') {
         return NextResponse.json(
-          { error: 'Only PDF files are allowed for resumes' },
+          { error: 'Only PDF files are allowed' },
           { status: 400 }
         );
       }
