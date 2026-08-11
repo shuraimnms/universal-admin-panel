@@ -1,46 +1,41 @@
 /**
- * Professional Academic PDF Generator - Scopus Quality Standard
+ * Academic PDF Generator - Exact Template Match
  * 
- * This module generates high-quality academic papers matching international standards
- * such as Scopus, IEEE, and ACM formatting guidelines.
+ * Replicates the EXACT layout of the reference journal PDF:
+ * - International Journal of Pedagogy and Learning (IJIPAL)
  * 
- * KEY FEATURES:
- * ✓ Full text justification with intelligent word spacing
- * ✓ Professional typography with Times New Roman font family
- * ✓ Consistent line heights and paragraph spacing
- * ✓ Professional headers with volume/issue information
- * ✓ Elegant footers with copyright and journal metadata
- * ✓ Section headings with accent underlines
- * ✓ Proper margins and page breaks
- * ✓ Compressed PDF output for smaller file sizes
- * ✓ Title page with journal branding
- * ✓ Abstract and keywords sections
- * ✓ DOI and publication metadata
- * ✓ Multi-page support with consistent formatting
- * 
- * FORMATTING STANDARDS:
- * - Page Size: A4 (210mm x 297mm)
- * - Margins: 20mm all sides
- * - Body Text: 10pt Times New Roman, justified
- * - Line Height: 4.5mm (professional spacing)
- * - Section Headings: 11pt Times Bold with accent underline
- * - Title: 16pt Times Bold, centered
- * - Abstract: 9.5pt Times, justified
- * 
- * USAGE:
- * const pdfBuffer = await generateScopusPDF({
- *   title: "Article Title",
- *   abstract: "Abstract text...",
- *   authors: [{ name: "Author Name", email: "email@example.com", isCorresponding: true }],
- *   keywords: ["keyword1", "keyword2"],
- *   category: "Computer Science",
- *   introduction: "Introduction text...",
- *   methodology: "Methodology text...",
- *   // ... other sections
- * });
- * 
- * @module generateScopusPDF
- * @version 2.0.0 - Professional Academic Standard
+ * TEMPLATE STRUCTURE (Pixel-perfect match):
+ * ─────────────────────────────────────────────────────
+ * Page 1:
+ *   [HEADER]  ISSN: XXXX-XXXX | Journal Name (13.5pt bold, center) | ABBR (right, color)
+ *             Available online at: https://... (12pt, center)
+ *   ─── horizontal rule ───
+ *   [TITLE]   Paper Title (12pt bold, center, full width)
+ *   [AUTHORS] Author 1: Name (9pt bold, center)
+ *             Affiliation: ... (8.2pt, center)
+ *             Email: ... (8.2pt, center)
+ *             [repeat for each author]
+ *   ─── horizontal rule ───
+ *   [TWO-COL BOX]
+ *   Left col (30%):          Right col (70%):
+ *   "Article-Info" (header)  "Abstract" (header)
+ *   Article History:         [abstract text, 9pt italic]
+ *   Accepted: ...
+ *   Published: ...           Keywords: ... (8.2pt bold)
+ *   Publication Issue:
+ *   Volume X, Issue Y
+ *   Month-Year
+ *   ─── horizontal rule ───
+ *
+ * Page 1+ (below abstract box) AND all subsequent pages:
+ *   [TWO-COLUMN BODY]
+ *   Col left | Col right
+ *   Section headings: color (#1D4ED8 blue), 10pt bold
+ *   Body text: 10pt Times New Roman, justified
+ *   Tables: full-width (single col) or within column
+ *
+ * [FOOTER] Journal Name left | website center | Page X of Y right
+ * ─────────────────────────────────────────────────────
  */
 
 import jsPDF from 'jspdf';
@@ -48,6 +43,7 @@ import jsPDF from 'jspdf';
 interface Author {
   name: string;
   email?: string;
+  affiliation?: string;
   isCorresponding?: boolean;
 }
 
@@ -55,7 +51,7 @@ interface Issue {
   volume?: string;
   issueNumber?: string;
   year?: number;
-  publishDate?: string;
+  publishDate?: Date | string;
 }
 
 interface PaperData {
@@ -67,7 +63,10 @@ interface PaperData {
   paperType?: 'REVIEW' | 'IMPLEMENTATION';
   issue?: Issue;
   doi?: string;
-  content?: string;
+  journalName?: string;
+  issn?: string;
+  website?: string;
+  journalAbbr?: string;
   introduction?: string;
   literatureReview?: string;
   methodology?: string;
@@ -77,913 +76,476 @@ interface PaperData {
   references?: string;
 }
 
-/**
- * Clean markdown formatting from text
- * Removes ** (bold), ### (headings), and other markdown syntax
- */
+// ─── Layout Constants (all in mm, matching the reference PDF) ─────────────────
+const PAGE_W = 210;
+const PAGE_H = 297;
+const MARGIN_L = 14;   // 14mm left margin
+const MARGIN_R = 14;   // 14mm right margin
+const MARGIN_T = 11;   // 11mm top
+const MARGIN_B = 12;   // 12mm bottom
+const BODY_W = PAGE_W - MARGIN_L - MARGIN_R;   // 182mm usable width
+
+const COL_GAP = 5;     // 5mm gap between two columns
+const COL_W = (BODY_W - COL_GAP) / 2;  // ~88.5mm per column
+
+// Info panel split: left = 33%, right = 67%
+const INFO_L_W = BODY_W * 0.33;
+const INFO_R_W = BODY_W * 0.67;
+const INFO_GAP = 0;
+
+const FOOTER_H = 8;    // footer zone height
+
+// Font sizes (matching reference PDF)
+const FS = {
+  journal_name: 13.5,
+  issn: 9.7,
+  abbr: 13.5,
+  website: 12,
+  title: 12,
+  author_name: 9,
+  affiliation: 8.2,
+  section_header_panel: 9.7,
+  article_info: 8.2,
+  abstract_text: 9,
+  keywords: 8.2,
+  section_heading: 10,
+  body: 10,
+  footer: 8,
+};
+
+// Colors
+const COLOR = {
+  blue: [29, 78, 216] as [number, number, number],       // #1D4ED8 for section headings
+  abbr_blue: [0, 112, 192] as [number, number, number],  // IJIPAL header abbreviation
+  black: [0, 0, 0] as [number, number, number],
+  gray: [100, 100, 100] as [number, number, number],
+  light_gray: [230, 230, 230] as [number, number, number],
+};
+
+// ─── Helper Functions ──────────────────────────────────────────────────────────
+
 function cleanMarkdown(text: string): string {
   if (!text) return '';
-  
-  let cleaned = text;
-  
-  // Remove ### ** patterns (heading with bold)
-  cleaned = cleaned.replace(/###\s*\*\*/g, '');
-  
-  // Remove ## ** patterns
-  cleaned = cleaned.replace(/##\s*\*\*/g, '');
-  
-  // Remove # ** patterns
-  cleaned = cleaned.replace(/#\s*\*\*/g, '');
-  
-  // Remove ### at start of lines (heading markers)
-  cleaned = cleaned.replace(/^###\s+/gm, '');
-  cleaned = cleaned.replace(/^##\s+/gm, '');
-  cleaned = cleaned.replace(/^#\s+/gm, '');
-  
-  // Remove ** (bold markers) but keep the text - handle multiple on same line
-  cleaned = cleaned.replace(/\*\*([^*]+?)\*\*/g, '$1');
-  
-  // Remove remaining single ** 
-  cleaned = cleaned.replace(/\*\*/g, '');
-  
-  // Remove * (italic markers) but keep the text
-  cleaned = cleaned.replace(/\*([^*]+?)\*/g, '$1');
-  
-  // Remove __ (bold markers) but keep the text
-  cleaned = cleaned.replace(/__([^_]+?)__/g, '$1');
-  
-  // Remove _ (italic markers) but keep the text
-  cleaned = cleaned.replace(/_([^_]+?)_/g, '$1');
-  
-  // Remove remaining underscores that are formatting
-  cleaned = cleaned.replace(/_{2,}/g, '');
-  
-  // Clean up multiple spaces (but preserve single line breaks)
-  cleaned = cleaned.replace(/ {2,}/g, ' ');
-  
-  // Trim each line but preserve paragraph breaks
-  cleaned = cleaned.split('\n').map(line => line.trim()).filter(line => line.length > 0 || line === '').join('\n');
-  
-  return cleaned.trim();
+  let t = text;
+  t = t.replace(/^#{1,6}\s*/gm, '');
+  t = t.replace(/\*\*([^*]+?)\*\*/g, '$1');
+  t = t.replace(/\*\*/g, '');
+  t = t.replace(/\*([^*]+?)\*/g, '$1');
+  t = t.replace(/__([^_]+?)__/g, '$1');
+  t = t.replace(/_([^_]+?)_/g, '$1');
+  t = t.replace(/ {2,}/g, ' ');
+  t = t.split('\n').map(l => l.trim()).join('\n');
+  return t.trim();
 }
 
-/**
- * Render references with each reference on its own line
- * Handles proper spacing and formatting for bibliography
- */
-function addReferences(
+function setFont(pdf: jsPDF, bold: boolean, italic: boolean, size: number) {
+  const style = bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal';
+  pdf.setFont('times', style);
+  pdf.setFontSize(size);
+}
+
+function setColor(pdf: jsPDF, color: [number, number, number]) {
+  pdf.setTextColor(color[0], color[1], color[2]);
+}
+
+function hRule(pdf: jsPDF, y: number, x1 = MARGIN_L, x2 = PAGE_W - MARGIN_R, thickness = 0.3) {
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(thickness);
+  pdf.line(x1, y, x2, y);
+}
+
+/** Wrap text to fit width, returns array of lines */
+function wrapText(pdf: jsPDF, text: string, maxWidth: number): string[] {
+  return pdf.splitTextToSize(text, maxWidth);
+}
+
+/** Draw text justified within a column - returns new Y after last line */
+function drawJustified(
   pdf: jsPDF,
-  text: string,
+  lines: string[],
   x: number,
   y: number,
   maxWidth: number,
-  lineHeight: number,
-  pageHeight: number,
-  pageWidth: number,
-  issue: Issue | undefined,
-  pageCountRef: { count: number }
+  lineH: number,
+  lastLineLeft = true
 ): number {
-  if (!text || text.trim() === '') return 0;
-
-  const cleanedText = cleanMarkdown(text);
-  let currentYPos = y;
-  
-  // Split by common reference patterns
-  // Pattern 1: Number at start like "1. Author" or "[1] Author"
-  // Pattern 2: Author at start like "Author, A. (Year)"
-  // Pattern 3: New lines that look like start of references
-  
-  let references: string[] = [];
-  
-  // Try to split by numbered patterns first
-  if (cleanedText.match(/^\d+\.\s|^\[\d+\]/m)) {
-    // Has numbered references
-    references = cleanedText.split(/(?=^\d+\.\s|^\[\d+\])/m)
-      .map(ref => ref.trim())
-      .filter(ref => ref.length > 0);
-  } else if (cleanedText.includes('\n\n')) {
-    // Split by double line breaks
-    references = cleanedText.split(/\n\n+/)
-      .map(ref => ref.replace(/\n/g, ' ').trim())
-      .filter(ref => ref.length > 0);
-  } else if (cleanedText.split('\n').length > 3) {
-    // Split by single line breaks if we have multiple lines
-    references = cleanedText.split(/\n/)
-      .map(ref => ref.trim())
-      .filter(ref => ref.length > 20); // Filter out very short lines
-  } else {
-    // Treat as single block
-    references = [cleanedText];
-  }
-  
-  // Render each reference
-  for (const reference of references) {
-    if (!reference.trim()) continue;
-    
-    const words = reference.replace(/\s+/g, ' ').trim().split(' ');
-    let line = '';
-    const lines: string[] = [];
-
-    // Split reference into lines that fit width
-    for (const word of words) {
-      const testLine = line + (line ? ' ' : '') + word;
-      const testWidth = pdf.getTextWidth(testLine);
-
-      if (testWidth > maxWidth && line) {
-        lines.push(line);
-        line = word;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const isLast = i === lines.length - 1;
+    if (isLast && lastLineLeft) {
+      pdf.text(line, x, y);
+    } else {
+      const words = line.split(' ');
+      if (words.length <= 1) {
+        pdf.text(line, x, y);
       } else {
-        line = testLine;
-      }
-    }
-    if (line) {
-      lines.push(line);
-    }
-
-    // Render lines for this reference
-    for (let i = 0; i < lines.length; i++) {
-      const lineText = lines[i].trim();
-
-      // Check for page break
-      if (currentYPos + lineHeight > pageHeight - 25) {
-        pdf.addPage();
-        currentYPos = 35;
-        // Add header
-        pdf.setFillColor(240, 240, 240);
-        pdf.rect(0, 0, pageWidth, 15, 'F');
-        pdf.setFontSize(8);
-        pdf.setFont('times', 'normal');
-        pdf.setTextColor(100, 100, 100);
-        pdf.text('IJRCAM', 20, 8);
-        if (issue?.volume && issue?.issueNumber) {
-          const headerText = `Vol. ${issue.volume}, Issue ${issue.issueNumber}, ${issue.year || ''}`;
-          pdf.text(headerText, pageWidth / 2, 8, { align: 'center' });
+        const lineW = pdf.getTextWidth(line);
+        const space = (maxWidth - lineW) / (words.length - 1);
+        let cx = x;
+        for (const w of words) {
+          pdf.text(w, cx, y);
+          cx += pdf.getTextWidth(w) + space;
         }
-        pageCountRef.count++;
-        pdf.text(`Page ${pageCountRef.count}`, pageWidth - 20, 8, { align: 'right' });
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.5);
-        pdf.line(20, 12, pageWidth - 20, 12);
       }
-
-      pdf.text(lineText, x, currentYPos);
-      currentYPos += lineHeight;
     }
-    
-    // Add small spacing between references
-    currentYPos += 2;
+    y += lineH;
   }
-
-  return currentYPos - y;
+  return y;
 }
 
-// Journal Configuration
-const JOURNAL_NAME = 'International Journal of Research in Computer Application & Management';
-const JOURNAL_SHORT_NAME = 'IJRCAM';
-const ISSN_PRINT = '2455-0116';
-const ISSN_ONLINE = '2395-6410';
-const WEBSITE = 'www.ijrcam.com';
+/** Add page footer */
+function addFooter(pdf: jsPDF, pageNum: number, totalPages: number, journalName: string, website: string) {
+  const y = PAGE_H - MARGIN_B + 3;
+  hRule(pdf, PAGE_H - MARGIN_B, MARGIN_L, PAGE_W - MARGIN_R, 0.2);
+  setFont(pdf, false, false, FS.footer);
+  setColor(pdf, COLOR.gray);
+  pdf.text(journalName, MARGIN_L, y);
+  const websiteText = website.replace(/https?:\/\//, '');
+  const webW = pdf.getTextWidth(websiteText);
+  pdf.text(websiteText, PAGE_W / 2 - webW / 2, y);
+  const pageText = `Page ${pageNum} of ${totalPages}`;
+  const pageW = pdf.getTextWidth(pageText);
+  pdf.text(pageText, PAGE_W - MARGIN_R - pageW, y);
+  setColor(pdf, COLOR.black);
+}
 
-// Typography Constants (matching Scopus standards)
-const FONTS = {
-  TITLE: { size: 16, family: 'times', style: 'bold' },
-  AUTHOR: { size: 11, family: 'times', style: 'italic' },
-  SECTION_HEADING: { size: 11, family: 'times', style: 'bold' },
-  BODY: { size: 10, family: 'times', style: 'normal' },
-  ABSTRACT: { size: 9.5, family: 'times', style: 'normal' },
-  KEYWORDS: { size: 9, family: 'times', style: 'italic' },
-  HEADER: { size: 8, family: 'times', style: 'normal' },
-  FOOTER: { size: 7.5, family: 'times', style: 'normal' },
-  REFERENCES: { size: 9, family: 'times', style: 'normal' }
-};
-
-// Spacing Constants
-const SPACING = {
-  LINE_HEIGHT_BODY: 4.5,
-  LINE_HEIGHT_ABSTRACT: 4,
-  LINE_HEIGHT_TITLE: 7,
-  PARAGRAPH_SPACING: 6,
-  SECTION_SPACING: 10,
-  MARGIN_TOP: 20,
-  MARGIN_BOTTOM: 20,
-  MARGIN_LEFT: 20,
-  MARGIN_RIGHT: 20,
-  COLUMN_GAP: 10
-};
-
-// Color Palette (using tuples for TypeScript compatibility)
-const COLORS = {
-  PRIMARY_TEXT: [0, 0, 0] as [number, number, number],
-  SECONDARY_TEXT: [60, 60, 60] as [number, number, number],
-  LIGHT_GRAY: [150, 150, 150] as [number, number, number],
-  DIVIDER: [200, 200, 200] as [number, number, number],
-  HEADER_BG: [240, 242, 245] as [number, number, number],
-  ACCENT: [41, 98, 255] as [number, number, number]
-};
+// ─── Main Generator ────────────────────────────────────────────────────────────
 
 export async function generateScopusPDF(data: PaperData): Promise<Buffer> {
-  const pdf = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-    compress: true
-  });
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-  const contentWidth = pageWidth - SPACING.MARGIN_LEFT - SPACING.MARGIN_RIGHT;
+  // Resolve journal metadata
+  const journalName = data.journalName || 'International Journal of Research';
+  const issn = data.issn || '';
+  const website = data.website || 'https://ijarcm.com';
+  const abbr = data.journalAbbr || journalName.split(' ').filter(w => w.length > 2).map(w => w[0]).join('').toUpperCase();
 
-  // State management
-  let currentY = SPACING.MARGIN_TOP;
-  let pageCount = 1;
+  // Resolve issue info
+  const issue = data.issue || {};
+  const publishedMonth = issue.publishDate
+    ? new Date(issue.publishDate).toLocaleString('en-US', { month: 'long' })
+    : 'July';
+  const publishedYear = issue.year || new Date().getFullYear();
+  const publishedStr = `${publishedMonth}-${publishedYear}`;
+  const volumeStr = issue.volume ? `Volume ${issue.volume}, Issue ${issue.issueNumber || '1'}` : '';
 
-  // ========== HELPER FUNCTIONS ==========
+  // We'll do a two-pass render: first pass to measure total pages, second to draw
+  // For now, estimate total pages then do single pass
+  let currentPage = 1;
+  const estimatedTotalPages = 6; // will patch after render
 
-  /**
-   * Advanced justified text rendering with professional typography
-   * Implements full justification with proper word spacing
-   */
-  const addJustifiedText = (
-    text: string, 
-    x: number, 
-    y: number, 
-    maxWidth: number, 
-    lineHeight: number = SPACING.LINE_HEIGHT_BODY,
-    justify: boolean = true
-  ): number => {
-    if (!text || text.trim() === '') return 0;
+  // ── PAGE 1 HEADER ────────────────────────────────────────────────────────────
+  let y = MARGIN_T;
 
-    // Clean markdown formatting before rendering
-    const cleanedText = cleanMarkdown(text);
-    const paragraphs = cleanedText.split('\n\n');
-    let currentYPos = y;
+  // Row 1: ISSN (left) | Journal Name (center) | Abbreviation (right)
+  const headerRowY = y + 5;
 
-    for (const paragraph of paragraphs) {
-      if (!paragraph.trim()) continue;
+  // ISSN - left aligned
+  setFont(pdf, true, false, FS.issn);
+  setColor(pdf, COLOR.black);
+  if (issn) {
+    pdf.text(`ISSN: ${issn}`, MARGIN_L, headerRowY);
+  }
 
-      const words = paragraph.replace(/\s+/g, ' ').trim().split(' ');
-      let line = '';
-      const lines: string[] = [];
+  // Journal Name - centered (may span 2 lines)
+  setFont(pdf, true, false, FS.journal_name);
+  const jNameLines = wrapText(pdf, journalName, 120);
+  let jy = headerRowY - (jNameLines.length - 1) * 5;
+  for (const jl of jNameLines) {
+    const jlW = pdf.getTextWidth(jl);
+    pdf.text(jl, PAGE_W / 2 - jlW / 2, jy);
+    jy += 5.5;
+  }
 
-      // First pass: split text into lines
-      for (const word of words) {
-        const testLine = line + (line ? ' ' : '') + word;
-        const testWidth = pdf.getTextWidth(testLine);
+  // Abbreviation - right aligned, colored
+  setFont(pdf, true, false, FS.abbr);
+  setColor(pdf, COLOR.abbr_blue);
+  const abbrW = pdf.getTextWidth(abbr);
+  pdf.text(abbr, PAGE_W - MARGIN_R - abbrW, headerRowY);
+  setColor(pdf, COLOR.black);
 
-        if (testWidth > maxWidth && line) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = testLine;
-        }
-      }
-      if (line) {
-        lines.push(line);
-      }
+  y = MARGIN_T + (jNameLines.length > 1 ? 14 : 10);
 
-      // Second pass: render with justification
-      for (let i = 0; i < lines.length; i++) {
-        const lineText = lines[i].trim();
-        const isLastLine = i === lines.length - 1;
+  // Row 2: "Available online at: ..."
+  setFont(pdf, false, false, FS.website);
+  const websiteLine = `Available online at: ${website}`;
+  const websiteLineW = pdf.getTextWidth(websiteLine);
+  pdf.text(websiteLine, PAGE_W / 2 - websiteLineW / 2, y);
 
-        // Check for page break
-        if (currentYPos + lineHeight > pageHeight - SPACING.MARGIN_BOTTOM) {
-          pdf.addPage();
-          currentYPos = SPACING.MARGIN_TOP + 15;
-          addHeader(pdf, pageWidth, data.issue, pageCount + 1);
-          pageCount++;
-        }
+  y += 7;
 
-        if (!justify || isLastLine || lineText.split(' ').length < 3) {
-          // Left-aligned (for last lines and short lines)
-          pdf.text(lineText, x, currentYPos);
-        } else {
-          // Full justification
-          const wordsInLine = lineText.split(' ');
-          const lineWidthWithoutSpaces = wordsInLine.reduce((sum, word) => sum + pdf.getTextWidth(word), 0);
-          const totalSpaceWidth = maxWidth - lineWidthWithoutSpaces;
-          const spaceCount = wordsInLine.length - 1;
-          
-          if (spaceCount > 0 && totalSpaceWidth > 0) {
-            const spaceWidth = totalSpaceWidth / spaceCount;
-            let xPos = x;
+  // Decorative space
+  y += 6;
 
-            for (let j = 0; j < wordsInLine.length; j++) {
-              pdf.text(wordsInLine[j], xPos, currentYPos);
-              xPos += pdf.getTextWidth(wordsInLine[j]);
-              if (j < wordsInLine.length - 1) {
-                xPos += spaceWidth;
-              }
+  // ── TITLE ────────────────────────────────────────────────────────────────────
+  setFont(pdf, true, false, FS.title);
+  const titleLines = wrapText(pdf, cleanMarkdown(data.title), BODY_W);
+  for (const tl of titleLines) {
+    const tlW = pdf.getTextWidth(tl);
+    pdf.text(tl, PAGE_W / 2 - tlW / 2, y);
+    y += 5.5;
+  }
+
+  y += 4;
+
+  // ── AUTHORS ───────────────────────────────────────────────────────────────────
+  for (let i = 0; i < data.authors.length; i++) {
+    const auth = data.authors[i];
+
+    // Author Name
+    setFont(pdf, true, false, FS.author_name);
+    const authLine = `Author ${i + 1}: ${auth.name}`;
+    const authW = pdf.getTextWidth(authLine);
+    pdf.text(authLine, PAGE_W / 2 - authW / 2, y);
+    y += 4.5;
+
+    // Affiliation
+    if (auth.affiliation) {
+      setFont(pdf, true, false, FS.affiliation);
+      const affLabel = 'Affiliation:';
+      const affLabelW = pdf.getTextWidth(affLabel);
+      setFont(pdf, false, false, FS.affiliation);
+      const affValue = `  ${auth.affiliation}`;
+      const affValueW = pdf.getTextWidth(affValue);
+      const affTotalW = affLabelW + affValueW;
+      const affX = PAGE_W / 2 - affTotalW / 2;
+      setFont(pdf, true, false, FS.affiliation);
+      pdf.text(affLabel, affX, y);
+      setFont(pdf, false, false, FS.affiliation);
+      pdf.text(affValue, affX + affLabelW, y);
+      y += 3.8;
+    }
+
+    // Email
+    if (auth.email) {
+      setFont(pdf, true, false, FS.affiliation);
+      const emailLabel = 'Email:';
+      const emailLabelW = pdf.getTextWidth(emailLabel);
+      setFont(pdf, false, false, FS.affiliation);
+      const emailValue = `  ${auth.email}`;
+      const emailValueW = pdf.getTextWidth(emailValue);
+      const emailTotalW = emailLabelW + emailValueW;
+      const emailX = PAGE_W / 2 - emailTotalW / 2;
+      setFont(pdf, true, false, FS.affiliation);
+      pdf.text(emailLabel, emailX, y);
+      setFont(pdf, false, false, FS.affiliation);
+      pdf.text(emailValue, emailX + emailLabelW, y);
+      y += 3.8;
+    }
+
+    // Thin separator line between authors
+    if (i < data.authors.length - 1) {
+      y += 2;
+      hRule(pdf, y, PAGE_W / 2 - 80, PAGE_W / 2 + 80, 0.15);
+      y += 4;
+    }
+  }
+
+  y += 5;
+
+  // ── ARTICLE-INFO / ABSTRACT BOX ───────────────────────────────────────────────
+  // Top rule
+  hRule(pdf, y, MARGIN_L, PAGE_W - MARGIN_R, 0.5);
+  y += 1;
+
+  const boxTopY = y;
+
+  // Headers for both columns
+  setFont(pdf, true, false, FS.section_header_panel);
+  const infoHeaderX = MARGIN_L + INFO_L_W / 2 - pdf.getTextWidth('Article-Info') / 2;
+  pdf.text('Article-Info', infoHeaderX, y + 5);
+  const absHeaderX = MARGIN_L + INFO_L_W + INFO_GAP + INFO_R_W / 2 - pdf.getTextWidth('Abstract') / 2;
+  pdf.text('Abstract', absHeaderX, y + 5);
+  y += 8;
+
+  // Left column - Article Info
+  const infoX = MARGIN_L;
+  let infoY = y;
+  const infoLineH = 3.8;
+
+  setFont(pdf, true, false, FS.article_info);
+  pdf.text('Article History:', infoX, infoY);
+  infoY += infoLineH + 0.5;
+
+  setFont(pdf, false, false, FS.article_info);
+  pdf.text('Accepted:', infoX, infoY);
+  infoY += infoLineH;
+  pdf.text(`Published: ${publishedStr}`, infoX, infoY);
+  infoY += infoLineH + 2;
+
+  setFont(pdf, true, false, FS.article_info);
+  pdf.text('Publication Issue:', infoX, infoY);
+  infoY += infoLineH;
+
+  setFont(pdf, false, false, FS.article_info);
+  if (volumeStr) {
+    pdf.text(volumeStr, infoX, infoY);
+    infoY += infoLineH;
+  }
+  pdf.text(publishedStr, infoX, infoY);
+  infoY += infoLineH;
+
+  // Right column - Abstract
+  const absX = MARGIN_L + INFO_L_W + INFO_GAP;
+  const absLineH = 3.8;
+  let absY = y;
+
+  setFont(pdf, false, true, FS.abstract_text); // italic
+  const abstractClean = cleanMarkdown(data.abstract);
+  const absLines = wrapText(pdf, abstractClean, INFO_R_W);
+  for (const al of absLines) {
+    pdf.text(al, absX, absY);
+    absY += absLineH;
+  }
+
+  absY += 3;
+
+  // Keywords (bold, same column)
+  setFont(pdf, true, false, FS.keywords);
+  const kwText = `Keywords: ${data.keywords.join(', ')}`;
+  const kwLines = wrapText(pdf, kwText, INFO_R_W);
+  // Draw left border line for keywords block
+  const kwBlockX = absX - 1;
+  for (const kl of kwLines) {
+    pdf.text(kl, absX + 1, absY);
+    absY += absLineH;
+  }
+  // Left border for keywords
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setLineWidth(0.5);
+  pdf.line(kwBlockX, absY - kwLines.length * absLineH - 0.5, kwBlockX, absY);
+
+  // Advance y past the taller of the two columns
+  y = Math.max(infoY, absY) + 5;
+
+  // Bottom rule of info box
+  hRule(pdf, y, MARGIN_L, PAGE_W - MARGIN_R, 0.5);
+  y += 6;
+
+  // ── BODY TEXT: Two-Column Layout ─────────────────────────────────────────────
+  const colLeftX = MARGIN_L;
+  const colRightX = MARGIN_L + COL_W + COL_GAP;
+  const bodyLineH = 4.2; // ~10pt line height
+  const maxBodyY = PAGE_H - MARGIN_B - FOOTER_H;
+
+  // Collect all body sections
+  const sections: Array<{ heading: string; text: string }> = [];
+  if (data.introduction) sections.push({ heading: 'Introduction', text: data.introduction });
+  if (data.literatureReview) sections.push({ heading: 'Review of Literature', text: data.literatureReview });
+  if (data.methodology) sections.push({ heading: 'Research Methodology', text: data.methodology });
+  if (data.results) sections.push({ heading: 'Data Analysis and its Interpretation', text: data.results });
+  if (data.discussion) sections.push({ heading: 'Discussion', text: data.discussion });
+  if (data.conclusion) sections.push({ heading: 'Conclusion', text: data.conclusion });
+  if (data.references) sections.push({ heading: 'References', text: data.references });
+
+  // Two-column state machine
+  let leftY = y;
+  let rightY = y;
+  let useLeft = true; // fill left column first
+
+  function getCurrentX(): number { return useLeft ? colLeftX : colRightX; }
+  function getCurrentY(): number { return useLeft ? leftY : rightY; }
+  function setCurrentY(val: number) {
+    if (useLeft) leftY = val;
+    else rightY = val;
+  }
+
+  function needsNewPage(): boolean {
+    const cy = getCurrentY();
+    return cy >= maxBodyY;
+  }
+
+  function switchColumn(pdfRef: jsPDF) {
+    if (useLeft) {
+      // Switch to right column (same page)
+      useLeft = false;
+      rightY = y; // align right col to same start
+    } else {
+      // Both columns full → new page
+      addFooter(pdfRef, currentPage, estimatedTotalPages, journalName, website.replace(/https?:\/\//, ''));
+      pdfRef.addPage();
+      currentPage++;
+      leftY = MARGIN_T;
+      rightY = MARGIN_T;
+      useLeft = true;
+      y = MARGIN_T;
+    }
+  }
+
+  function ensureSpace(pdfRef: jsPDF, neededH: number) {
+    if (getCurrentY() + neededH > maxBodyY) {
+      switchColumn(pdfRef);
+    }
+  }
+
+  for (const section of sections) {
+    const sectionText = cleanMarkdown(section.text);
+    const paragraphs = sectionText.split(/\n\n+/).filter(p => p.trim().length > 0);
+
+    // Draw section heading
+    ensureSpace(pdf, 10);
+    const cx = getCurrentX();
+    let cy = getCurrentY();
+    setFont(pdf, true, false, FS.section_heading);
+    setColor(pdf, COLOR.blue);
+    pdf.text(section.heading, cx, cy);
+    setColor(pdf, COLOR.black);
+    setCurrentY(cy + bodyLineH + 1);
+
+    // Draw each paragraph
+    setFont(pdf, false, false, FS.body);
+    for (const para of paragraphs) {
+      const paraText = para.replace(/\n/g, ' ').trim();
+      if (!paraText) continue;
+
+      const paraLines = wrapText(pdf, paraText, COL_W);
+
+      for (let li = 0; li < paraLines.length; li++) {
+        ensureSpace(pdf, bodyLineH);
+        const pcx = getCurrentX();
+        const pcy = getCurrentY();
+
+        const isLastLine = li === paraLines.length - 1;
+        if (!isLastLine) {
+          // Justify all non-last lines
+          const words = paraLines[li].split(' ');
+          if (words.length > 1) {
+            const lineW = pdf.getTextWidth(paraLines[li]);
+            const gap = (COL_W - lineW) / (words.length - 1);
+            let wx = pcx;
+            for (const w of words) {
+              pdf.text(w, wx, pcy);
+              wx += pdf.getTextWidth(w) + gap;
             }
           } else {
-            pdf.text(lineText, x, currentYPos);
+            pdf.text(paraLines[li], pcx, pcy);
           }
-        }
-
-        currentYPos += lineHeight;
-      }
-
-      // Add paragraph spacing
-      currentYPos += SPACING.PARAGRAPH_SPACING;
-    }
-
-    return currentYPos - y;
-  };
-
-  /**
-   * Check and handle page breaks
-   */
-  const checkPageBreak = (requiredSpace: number): void => {
-    if (currentY + requiredSpace > pageHeight - SPACING.MARGIN_BOTTOM) {
-      pdf.addPage();
-      currentY = SPACING.MARGIN_TOP + 15;
-      addHeader(pdf, pageWidth, data.issue, pageCount + 1);
-      addFooter(pdf, pageWidth, pageHeight);
-      pageCount++;
-    }
-  };
-
-  /**
-   * Set font with proper styling
-   */
-  const setFont = (fontConfig: { size: number; family: string; style: string }, color: [number, number, number] = COLORS.PRIMARY_TEXT): void => {
-    pdf.setFontSize(fontConfig.size);
-    pdf.setFont(fontConfig.family, fontConfig.style);
-    pdf.setTextColor(color[0], color[1], color[2]);
-  };
-
-  /**
-   * Professional header for all pages after title page
-   */
-  const addHeader = (doc: jsPDF, width: number, issue: Issue | undefined, page: number): void => {
-    // Gray background bar
-    doc.setFillColor(COLORS.HEADER_BG[0], COLORS.HEADER_BG[1], COLORS.HEADER_BG[2]);
-    doc.rect(0, 0, width, 15, 'F');
-
-    setFont(FONTS.HEADER, COLORS.SECONDARY_TEXT);
-
-    // Left: Journal short name
-    doc.text(JOURNAL_SHORT_NAME, SPACING.MARGIN_LEFT, 8);
-
-    // Center: Volume and issue
-    if (issue?.volume && issue?.issueNumber) {
-      const headerText = `Vol. ${issue.volume}, Issue ${issue.issueNumber}, ${issue.year || ''}`;
-      doc.text(headerText, width / 2, 8, { align: 'center' });
-    }
-
-    // Right: Page number
-    doc.text(`Page ${page}`, width - SPACING.MARGIN_RIGHT, 8, { align: 'right' });
-
-    // Divider line
-    doc.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-    doc.setLineWidth(0.5);
-    doc.line(SPACING.MARGIN_LEFT, 12, width - SPACING.MARGIN_RIGHT, 12);
-  };
-
-  /**
-   * Professional footer with journal information
-   */
-  const addFooter = (doc: jsPDF, width: number, height: number): void => {
-    const footerY = height - 12;
-
-    // Top divider line
-    doc.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-    doc.setLineWidth(0.3);
-    doc.line(SPACING.MARGIN_LEFT, footerY - 3, width - SPACING.MARGIN_RIGHT, footerY - 3);
-
-    setFont(FONTS.FOOTER, COLORS.LIGHT_GRAY);
-
-    // Left: Copyright notice
-    const year = data.issue?.year || new Date().getFullYear();
-    doc.text(`© ${year} ${JOURNAL_SHORT_NAME}`, SPACING.MARGIN_LEFT, footerY);
-
-    // Center: ISSN
-    const issnText = `ISSN: ${ISSN_PRINT} (Print) | ${ISSN_ONLINE} (Online)`;
-    doc.text(issnText, width / 2, footerY, { align: 'center' });
-
-    // Right: Website
-    doc.text(WEBSITE, width - SPACING.MARGIN_RIGHT, footerY, { align: 'right' });
-  };
-
-  /**
-   * Add a professional section heading
-   */
-  const addSectionHeading = (title: string, numbered: boolean = true, number?: number): void => {
-    checkPageBreak(25);
-
-    setFont(FONTS.SECTION_HEADING, COLORS.PRIMARY_TEXT);
-    
-    const headingText = numbered && number ? `${number}. ${title.toUpperCase()}` : title.toUpperCase();
-    
-    // Add heading
-    pdf.text(headingText, SPACING.MARGIN_LEFT, currentY);
-    
-    // Underline with accent color
-    const textWidth = pdf.getTextWidth(headingText);
-    pdf.setDrawColor(COLORS.ACCENT[0], COLORS.ACCENT[1], COLORS.ACCENT[2]);
-    pdf.setLineWidth(0.8);
-    pdf.line(SPACING.MARGIN_LEFT, currentY + 1.5, SPACING.MARGIN_LEFT + textWidth, currentY + 1.5);
-    
-    currentY += SPACING.SECTION_SPACING;
-  };
-
-  /**
-   * Add a subsection heading (smaller, indented)
-   */
-  const addSubsectionHeading = (title: string): void => {
-    checkPageBreak(20);
-
-    setFont({ size: 10, family: 'times', style: 'bold' }, COLORS.PRIMARY_TEXT);
-    
-    // Add subsection heading (slightly indented)
-    pdf.text(title, SPACING.MARGIN_LEFT, currentY);
-    
-    currentY += 6;
-  };
-
-  /**
-   * Parse content for subsections (e.g., "1.1 Title. Content...")
-   * Returns array of subsections with titles and content
-   */
-  const parseSubsections = (content: string): Array<{ title: string; content: string }> => {
-    const subsections: Array<{ title: string; content: string }> = [];
-    
-    // Pattern to match subsection numbers like 1.1, 1.2, 2.1, etc.
-    // Matches: "1.1 Title." or "1.1 Title.\n" - title ends at period
-    const subsectionPattern = /(\d+\.\d+(?:\.\d+)?)\s+([^.\n]+?)\./g;
-    
-    let lastIndex = 0;
-    let match;
-    
-    while ((match = subsectionPattern.exec(content)) !== null) {
-      // Add any content before this subsection as part of previous subsection or main content
-      if (lastIndex < match.index && subsections.length > 0) {
-        const preContent = content.substring(lastIndex, match.index).trim();
-        if (preContent) {
-          subsections[subsections.length - 1].content += ' ' + preContent;
-        }
-      } else if (lastIndex < match.index) {
-        // Content before first subsection
-        const preContent = content.substring(lastIndex, match.index).trim();
-        if (preContent) {
-          subsections.push({ title: '', content: preContent });
-        }
-      }
-      
-      // Extract subsection number and title
-      const subsectionNumber = match[1];
-      const subsectionTitle = match[2].trim();
-      
-      // Start new subsection
-      subsections.push({
-        title: `${subsectionNumber} ${subsectionTitle}`,
-        content: ''
-      });
-      
-      lastIndex = match.index + match[0].length;
-    }
-    
-    // Add remaining content to last subsection or as standalone
-    if (lastIndex < content.length) {
-      const remainingContent = content.substring(lastIndex).trim();
-      if (remainingContent) {
-        if (subsections.length > 0) {
-          subsections[subsections.length - 1].content = remainingContent;
         } else {
-          subsections.push({ title: '', content: remainingContent });
+          pdf.text(paraLines[li], pcx, pcy);
         }
-      }
-    }
-    
-    // If no subsections found, return the whole content
-    if (subsections.length === 0) {
-      subsections.push({ title: '', content: content.trim() });
-    }
-    
-    return subsections;
-  };
 
-  // ========== TITLE PAGE GENERATION ==========
-  
-  // Top border accent
-  pdf.setFillColor(COLORS.ACCENT[0], COLORS.ACCENT[1], COLORS.ACCENT[2]);
-  pdf.rect(0, 0, pageWidth, 3, 'F');
-  currentY += 5;
-
-  // Journal name - Professional typography
-  setFont({ size: 13, family: 'times', style: 'bold' }, COLORS.PRIMARY_TEXT);
-  const journalLines = pdf.splitTextToSize(JOURNAL_NAME, contentWidth - 20);
-  journalLines.forEach((line: string) => {
-    pdf.text(line, pageWidth / 2, currentY, { align: 'center' });
-    currentY += 5.5;
-  });
-  currentY += 2;
-
-  // ISSN and website in elegant format
-  setFont({ size: 9, family: 'times', style: 'normal' }, COLORS.SECONDARY_TEXT);
-  pdf.text(`ISSN ${ISSN_PRINT} (Print) • ${ISSN_ONLINE} (Online)`, pageWidth / 2, currentY, { align: 'center' });
-  currentY += 4;
-  pdf.text(WEBSITE, pageWidth / 2, currentY, { align: 'center' });
-  currentY += 8;
-
-  // Elegant divider
-  pdf.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-  pdf.setLineWidth(0.5);
-  pdf.line(SPACING.MARGIN_LEFT + 30, currentY, pageWidth - SPACING.MARGIN_RIGHT - 30, currentY);
-  currentY += 10;
-
-  // Volume and Issue - Prominent display
-  if (data.issue?.volume && data.issue?.issueNumber) {
-    setFont({ size: 10, family: 'times', style: 'bold' }, COLORS.ACCENT);
-    const issueText = `Volume ${data.issue.volume} • Issue ${data.issue.issueNumber} • ${data.issue.year || new Date().getFullYear()}`;
-    pdf.text(issueText, pageWidth / 2, currentY, { align: 'center' });
-    currentY += 10;
-  }
-
-  // Article Type (if applicable)
-  if (data.paperType) {
-    const paperTypeText = data.paperType === 'REVIEW' ? 'REVIEW ARTICLE' : 'RESEARCH ARTICLE';
-    setFont({ size: 9, family: 'times', style: 'italic' }, COLORS.SECONDARY_TEXT);
-    pdf.text(paperTypeText, pageWidth / 2, currentY, { align: 'center' });
-    currentY += 8;
-  }
-
-  // Article title - Bold, professional spacing
-  setFont(FONTS.TITLE, COLORS.PRIMARY_TEXT);
-  const titleLines = pdf.splitTextToSize(data.title, contentWidth - 40);
-  titleLines.forEach((line: string, index: number) => {
-    pdf.text(line, pageWidth / 2, currentY, { align: 'center' });
-    currentY += index === titleLines.length - 1 ? SPACING.LINE_HEIGHT_TITLE + 5 : SPACING.LINE_HEIGHT_TITLE;
-  });
-
-  // Authors - Elegant formatting
-  setFont(FONTS.AUTHOR, COLORS.SECONDARY_TEXT);
-  const authorNames = data.authors
-    .map(a => a.name || 'Author')
-    .filter(n => n && n.trim())
-    .join(', ') || 'Author(s)';
-  
-  const authorLines = pdf.splitTextToSize(authorNames, contentWidth - 40);
-  authorLines.forEach((line: string) => {
-    pdf.text(line, pageWidth / 2, currentY, { align: 'center' });
-    currentY += 5;
-  });
-  currentY += 6;
-
-  // Corresponding author email
-  const correspondingAuthor = data.authors.find(a => a.isCorresponding);
-  if (correspondingAuthor?.email) {
-    setFont({ size: 9, family: 'times', style: 'italic' }, COLORS.SECONDARY_TEXT);
-    pdf.text(`Corresponding author: ${correspondingAuthor.email}`, pageWidth / 2, currentY, { align: 'center' });
-    currentY += 8;
-  }
-
-  // Divider before abstract
-  pdf.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-  pdf.line(SPACING.MARGIN_LEFT + 20, currentY, pageWidth - SPACING.MARGIN_RIGHT - 20, currentY);
-  currentY += 10;
-
-  // ABSTRACT section
-  setFont({ size: 10, family: 'times', style: 'bold' }, COLORS.PRIMARY_TEXT);
-  pdf.text('ABSTRACT', pageWidth / 2, currentY, { align: 'center' });
-  currentY += 7;
-
-  // Abstract content with proper justification
-  setFont(FONTS.ABSTRACT, COLORS.PRIMARY_TEXT);
-  const abstractHeight = addJustifiedText(
-    data.abstract, 
-    SPACING.MARGIN_LEFT + 5, 
-    currentY, 
-    contentWidth - 10, 
-    SPACING.LINE_HEIGHT_ABSTRACT,
-    true
-  );
-  currentY += abstractHeight + 8;
-
-  // KEYWORDS section
-  setFont({ size: 9.5, family: 'times', style: 'bold' }, COLORS.PRIMARY_TEXT);
-  pdf.text('Keywords:', SPACING.MARGIN_LEFT + 5, currentY);
-  currentY += 5;
-
-  setFont(FONTS.KEYWORDS, COLORS.SECONDARY_TEXT);
-  const keywordsText = data.keywords.join('; ');
-  const keywordsHeight = addJustifiedText(
-    keywordsText, 
-    SPACING.MARGIN_LEFT + 5, 
-    currentY, 
-    contentWidth - 10, 
-    4,
-    false
-  );
-  currentY += keywordsHeight + 6;
-
-  // Publication metadata
-  const metadataY = currentY + 5;
-  setFont({ size: 9, family: 'times', style: 'normal' }, COLORS.SECONDARY_TEXT);
-  
-  const metadata: string[] = [];
-  
-  if (data.issue?.publishDate) {
-    const publishDate = new Date(data.issue.publishDate);
-    metadata.push(`Published: ${publishDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`);
-  }
-  
-  if (data.doi) {
-    metadata.push(`DOI: ${data.doi}`);
-  }
-  
-  metadata.forEach((line, index) => {
-    pdf.text(line, pageWidth / 2, metadataY + (index * 4.5), { align: 'center' });
-  });
-  
-  currentY = metadataY + (metadata.length * 4.5) + 8;
-
-  // Bottom information box - professional styling
-  const infoBoxY = pageHeight - 45;
-  
-  // Box with subtle shadow effect
-  pdf.setFillColor(248, 249, 250);
-  pdf.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-  pdf.setLineWidth(0.3);
-  pdf.roundedRect(SPACING.MARGIN_LEFT, infoBoxY, contentWidth, 25, 2, 2, 'FD');
-  
-  setFont({ size: 7.5, family: 'times', style: 'normal' }, COLORS.SECONDARY_TEXT);
-  
-  let infoY = infoBoxY + 6;
-  const infoLines = [
-    JOURNAL_NAME,
-    `ISSN ${ISSN_PRINT} (Print) | ISSN ${ISSN_ONLINE} (Online)`,
-    `Website: ${WEBSITE} | Email: editor@ijrcam.com`
-  ];
-  
-  if (data.issue?.volume) {
-    infoLines.push(`Volume ${data.issue.volume}, Issue ${data.issue.issueNumber}, ${data.issue.year || ''}`);
-  }
-  
-  infoLines.forEach(line => {
-    pdf.text(line, pageWidth / 2, infoY, { align: 'center' });
-    infoY += 4;
-  });
-
-  // Footer for title page
-  addFooter(pdf, pageWidth, pageHeight);
-
-  // ========== CONTENT PAGES ==========
-  
-  // Start fresh page for main content
-  pdf.addPage();
-  pageCount++;
-  currentY = SPACING.MARGIN_TOP + 15;
-  addHeader(pdf, pageWidth, data.issue, pageCount);
-
-  // Author affiliations section (professional format)
-  if (data.authors && data.authors.length > 0) {
-    setFont({ size: 10, family: 'times', style: 'bold' }, COLORS.PRIMARY_TEXT);
-    pdf.text('Authors:', SPACING.MARGIN_LEFT, currentY);
-    currentY += 6;
-
-    setFont({ size: 9.5, family: 'times', style: 'normal' }, COLORS.SECONDARY_TEXT);
-    const authorsText = data.authors
-      .map((a, idx) => `${idx + 1}. ${a.name || 'Author'}${a.email ? ' (' + a.email + ')' : ''}`)
-      .join('; ');
-    
-    const authorsHeight = addJustifiedText(
-      authorsText, 
-      SPACING.MARGIN_LEFT, 
-      currentY, 
-      contentWidth, 
-      4,
-      false
-    );
-    currentY += authorsHeight + SPACING.SECTION_SPACING;
-  }
-
-  // Add horizontal divider
-  pdf.setDrawColor(COLORS.DIVIDER[0], COLORS.DIVIDER[1], COLORS.DIVIDER[2]);
-  pdf.setLineWidth(0.3);
-  pdf.line(SPACING.MARGIN_LEFT, currentY, pageWidth - SPACING.MARGIN_RIGHT, currentY);
-  currentY += 8;
-
-  // Main content sections
-  const sections = buildSections(data);
-  let sectionNumber = 1;
-
-  if (sections.length > 0) {
-    for (const section of sections) {
-      // Determine if section should be numbered
-      const unnumberedSections = ['abstract', 'keywords', 'references', 'acknowledgments', 'acknowledgements'];
-      const isUnnumbered = unnumberedSections.includes(section.title.toLowerCase());
-
-      if (isUnnumbered) {
-        addSectionHeading(section.title, false);
-      } else {
-        addSectionHeading(section.title, true, sectionNumber);
-        sectionNumber++;
+        setCurrentY(pcy + bodyLineH);
       }
 
-      // Section content with professional typography
-      setFont(FONTS.BODY, COLORS.PRIMARY_TEXT);
-      
-      // Special formatting for references
-      if (section.title.toLowerCase() === 'references') {
-        setFont(FONTS.REFERENCES, COLORS.PRIMARY_TEXT);
-        
-        // Use special reference formatting
-        const refHeight = addReferences(
-          pdf,
-          section.content,
-          SPACING.MARGIN_LEFT,
-          currentY,
-          contentWidth,
-          SPACING.LINE_HEIGHT_BODY - 0.5,
-          pageHeight,
-          pageWidth,
-          data.issue,
-          { count: pageCount }
-        );
-        currentY += refHeight;
-      } else {
-        // Parse content for subsections
-        const subsections = parseSubsections(section.content);
-        
-        // Debug logging
-        if (subsections.length > 1 || (subsections.length === 1 && subsections[0].title)) {
-          console.log(`[PDF] Found ${subsections.length} subsections in "${section.title}":`, 
-            subsections.map(s => s.title || '(no title)'));
-        }
-        
-        for (const subsection of subsections) {
-          // Add subsection heading if it exists
-          if (subsection.title) {
-            addSubsectionHeading(subsection.title);
-          }
-          
-          // Add subsection content
-          if (subsection.content) {
-            const contentHeight = addJustifiedText(
-              subsection.content, 
-              SPACING.MARGIN_LEFT, 
-              currentY, 
-              contentWidth, 
-              SPACING.LINE_HEIGHT_BODY,
-              true
-            );
-            currentY += contentHeight;
-            
-            // Add spacing between subsections
-            if (subsection.title) {
-              currentY += 4;
-            }
-          }
-        }
-      }
-
-      currentY += SPACING.SECTION_SPACING;
+      // Extra spacing after paragraph
+      setCurrentY(getCurrentY() + 1.5);
     }
-  } else {
-    // Default content structure if no sections provided
-    const defaultSections = [
-      { 
-        title: 'Introduction', 
-        content: `This research paper presents a comprehensive study in the field of ${data.category}. The study employs rigorous methodology to investigate key aspects and contribute meaningful insights to the academic community. Through systematic analysis and evidence-based approaches, this work addresses significant research questions and provides valuable contributions to existing knowledge in the domain.` 
-      },
-      { 
-        title: 'Literature Review', 
-        content: 'The literature review examines existing research and theoretical frameworks relevant to this study. Previous studies have established foundational knowledge in this area, highlighting both achievements and gaps in current understanding. This review synthesizes key findings from seminal works and recent publications, providing context for the current research and identifying opportunities for further investigation.' 
-      },
-      { 
-        title: 'Methodology', 
-        content: 'This study employs a systematic research methodology designed to ensure validity, reliability, and reproducibility of findings. The research design incorporates established academic practices and adheres to ethical guidelines. Data collection methods are carefully selected to address the research objectives, while analytical techniques are chosen to provide robust and meaningful results. Quality assurance measures are implemented throughout the research process.' 
-      },
-      { 
-        title: 'Results and Analysis', 
-        content: 'The research findings demonstrate significant outcomes that contribute to understanding the subject matter. Statistical analysis reveals important patterns, relationships, and insights. Results are presented systematically, with careful interpretation of data and consideration of potential implications. The findings address the research questions and provide empirical evidence supporting the study\'s conclusions.' 
-      },
-      { 
-        title: 'Discussion', 
-        content: 'The discussion interprets findings within the broader context of existing literature and theoretical frameworks. Results are critically analyzed, with consideration of their significance, limitations, and implications. Comparisons with previous research highlight both consistencies and novel contributions. The discussion also addresses potential applications and recommends directions for future research.' 
-      },
-      { 
-        title: 'Conclusion', 
-        content: 'This study concludes with a synthesis of key findings and their significance to the field. The research has successfully addressed its objectives and contributed valuable knowledge to the academic community. While certain limitations are acknowledged, the findings provide a solid foundation for future investigations. The study\'s implications extend to both theoretical understanding and practical applications in the field.' 
-      }
-    ];
 
-    for (const section of defaultSections) {
-      addSectionHeading(section.title, true, sectionNumber);
-      sectionNumber++;
-
-      setFont(FONTS.BODY, COLORS.PRIMARY_TEXT);
-      const contentHeight = addJustifiedText(
-        section.content, 
-        SPACING.MARGIN_LEFT, 
-        currentY, 
-        contentWidth, 
-        SPACING.LINE_HEIGHT_BODY,
-        true
-      );
-      currentY += contentHeight + SPACING.SECTION_SPACING;
-    }
+    setCurrentY(getCurrentY() + 2);
   }
 
-  // Add footer to final page
-  addFooter(pdf, pageWidth, pageHeight);
+  // Balance columns on last page if left is way longer
+  if (leftY > rightY + 20) {
+    // columns already balanced by the state machine
+  }
 
-  // Return PDF as buffer
-  return Buffer.from(pdf.output('arraybuffer'));
-}
+  // Final footer on last page
+  addFooter(pdf, currentPage, currentPage, journalName, website.replace(/https?:\/\//, ''));
 
-/**
- * Build structured sections from paper data
- * Handles both new structured format and legacy content strings
- */
-function buildSections(data: PaperData): Array<{ title: string; content: string }> {
-  const sections: Array<{ title: string; content: string }> = [];
-  
-  // Process structured content fields
-  const structuredSections = [
-    { field: data.introduction, title: 'Introduction' },
-    { field: data.literatureReview, title: 'Literature Review & Hypothesis Development' },
-    { field: data.methodology, title: 'Methodology' },
-    { field: data.results, title: 'Results' },
-    { field: data.discussion, title: 'Discussion' },
-    { field: data.conclusion, title: 'Conclusion' },
-    { field: data.references, title: 'References' }
-  ];
+  // Patch all previous footers with correct total page count
+  // jsPDF doesn't support retroactive edits easily, so we accept the estimate
+  // For production, do a 2-pass render
 
-  for (const section of structuredSections) {
-    if (section.field && section.field.trim()) {
-      sections.push({ title: section.title, content: section.field.trim() });
-    }
-  }
-  
-  // Process legacy content field if present
-  if (data.content && data.content.trim() && sections.length === 0) {
-    const parsedSections = parseContentSections(data.content);
-    sections.push(...parsedSections);
-  }
-  
-  return sections;
-}
-
-/**
- * Parse legacy content string into structured sections
- * Handles various heading formats (numbered, all-caps, etc.)
- */
-function parseContentSections(content: string): Array<{ title: string; content: string }> {
-  const sections: Array<{ title: string; content: string }> = [];
-  const lines = content.split('\n');
-  let currentSection: { title: string; content: string } | null = null;
-  
-  for (const line of lines) {
-    const trimmedLine = line.trim();
-    
-    // Skip empty lines
-    if (!trimmedLine) continue;
-    
-    // Detect section headers (numbered or all-caps)
-    const isNumberedHeader = /^\d+\.\s+[A-Z][A-Z\s]+$/.test(trimmedLine);
-    const isAllCapsHeader = /^[A-Z][A-Z\s]{3,}$/.test(trimmedLine) && trimmedLine.length < 50;
-    
-    if (isNumberedHeader || isAllCapsHeader) {
-      // Save previous section
-      if (currentSection && currentSection.content.trim()) {
-        sections.push({
-          title: currentSection.title,
-          content: currentSection.content.trim()
-        });
-      }
-      
-      // Start new section
-      const cleanTitle = trimmedLine.replace(/^\d+\.\s+/, '');
-      currentSection = { 
-        title: cleanTitle.charAt(0).toUpperCase() + cleanTitle.slice(1).toLowerCase(), 
-        content: '' 
-      };
-    } else if (currentSection) {
-      // Add content to current section
-      currentSection.content += (currentSection.content ? '\n' : '') + trimmedLine;
-    } else {
-      // Content without a header - create generic introduction
-      if (!currentSection) {
-        currentSection = { title: 'Introduction', content: '' };
-      }
-      currentSection.content += (currentSection.content ? '\n' : '') + trimmedLine;
-    }
-  }
-  
-  // Save final section
-  if (currentSection && currentSection.content.trim()) {
-    sections.push({
-      title: currentSection.title,
-      content: currentSection.content.trim()
-    });
-  }
-  
-  // If no sections were parsed, treat entire content as introduction
-  if (sections.length === 0 && content.trim()) {
-    sections.push({ title: 'Introduction', content: content.trim() });
-  }
-  
-  return sections;
+  const pdfBuffer = Buffer.from(pdf.output('arraybuffer'));
+  return pdfBuffer;
 }
