@@ -7,6 +7,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { generateScopusPDF } from '@/lib/generateScopusPDF';
+import { runDocxPipeline } from '@/lib/docxPipeline';
 import { revalidatePath } from 'next/cache';
 
 
@@ -324,23 +325,39 @@ export async function POST(request: NextRequest) {
 
     let relativeFilePath: string;
 
+    // Fetch issue details if issueId is provided
+    let issueData = null;
+    if (issueId) {
+      issueData = await prisma.issue.findUnique({
+        where: { id: issueId },
+        select: {
+          volume: true,
+          issueNumber: true,
+          year: true,
+          publishDate: true
+        }
+      });
+    }
+
+    // Fetch site/journal details if siteId is provided
+    let journalName = '';
+    let issn = '';
+    let website = '';
+    if (siteId) {
+      const site = await prisma.site.findUnique({
+        where: { id: siteId },
+        include: { crossrefJournalSettings: true }
+      });
+      if (site) {
+        journalName = site.name;
+        issn = site.crossrefJournalSettings?.issn || site.crossrefJournalSettings?.eissn || '';
+        website = site.crossrefJournalSettings?.homepage || '';
+      }
+    }
+
     if (generatePDF) {
       // Generate PDF from content using Scopus format
       try {
-        // Fetch issue details if issueId is provided
-        let issueData;
-        if (issueId) {
-          issueData = await prisma.issue.findUnique({
-            where: { id: issueId },
-            select: {
-              volume: true,
-              issueNumber: true,
-              year: true,
-              publishDate: true
-            }
-          });
-        }
-
         const pdfData = {
           title,
           abstract,
@@ -352,7 +369,7 @@ export async function POST(request: NextRequest) {
           keywords: keywords ? keywords.split(',').map(k => k.trim()) : [],
           category,
           paperType: paperType || undefined,
-          issue: issueData,
+          issue: issueData || undefined,
           doi: formData.get('doi') as string | undefined,
           introduction: introduction || undefined,
           literatureReview: literatureReview || undefined,
@@ -383,15 +400,52 @@ export async function POST(request: NextRequest) {
     } else {
       // Save uploaded file
       const timestamp = Date.now();
-      const fileExtension = file.name.split('.').pop();
-      const fileName = `paper_${timestamp}.${fileExtension}`;
-      const filePath = join(uploadsDir, fileName);
-      relativeFilePath = `/uploads/papers/${fileName}`;
-
-      // Save file
+      const fileExtension = file.name.split('.').pop()?.toLowerCase();
+      
       const bytes = await file.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-      await writeFile(filePath, buffer);
+      const fileBuffer = Buffer.from(bytes);
+
+      if (fileExtension === 'docx' || fileExtension === 'doc') {
+        try {
+          const pipelineResult = await runDocxPipeline({
+            fileBuffer,
+            title,
+            authors: authors.map(a => ({
+              name: `${a.firstName || ''} ${a.lastName || ''}`.trim(),
+              email: a.email,
+              affiliation: undefined
+            })),
+            category,
+            issue: issueData || undefined,
+            doi: formData.get('doi') as string | undefined,
+            journalName: journalName || undefined,
+            issn: issn || undefined,
+            website: website || undefined
+          });
+
+          // Save formatted DOCX and PDF
+          const formattedDocxName = `paper_${timestamp}_formatted.docx`;
+          const formattedPdfName = `paper_${timestamp}_formatted.pdf`;
+
+          await writeFile(join(uploadsDir, formattedDocxName), pipelineResult.docxBuffer);
+          await writeFile(join(uploadsDir, formattedPdfName), pipelineResult.pdfBuffer);
+
+          // Set filePath in DB to point to the formatted PDF
+          relativeFilePath = `/uploads/papers/${formattedPdfName}`;
+        } catch (pipelineError) {
+          console.error('Error in docx pipeline:', pipelineError);
+          return NextResponse.json(
+            { error: 'Failed to format uploaded DOCX manuscript' },
+            { status: 500 }
+          );
+        }
+      } else {
+        // Standard PDF upload
+        const fileName = `paper_${timestamp}.${fileExtension}`;
+        const filePath = join(uploadsDir, fileName);
+        relativeFilePath = `/uploads/papers/${fileName}`;
+        await writeFile(filePath, fileBuffer);
+      }
     }
 
     // Validate issue if provided
