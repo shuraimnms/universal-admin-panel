@@ -28,7 +28,7 @@ export default function AnnouncementsPage() {
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const url = activeSite ? `/api/admin/announcements?admin=true&siteId=${activeSite.id}` : "/api/admin/announcements?admin=true";
+      const url = activeSite ? `/api/admin/announcements?admin=true&siteId=${activeSite.id}` : "/api/admin/announcements?admin=true&siteId=global";
       const res = await fetch(url);
       const data = await res.json();
       setAnnouncements(Array.isArray(data) ? data : data.announcements || []);

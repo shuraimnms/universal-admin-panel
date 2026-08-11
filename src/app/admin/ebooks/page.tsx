@@ -64,7 +64,7 @@ export default function EBooksPage() {
   const fetchEbooks = async () => {
     try {
       setLoading(true);
-      const url = activeSite ? `/api/admin/ebooks?siteId=${activeSite.id}&limit=100` : '/api/admin/ebooks?limit=100';
+      const url = activeSite ? `/api/admin/ebooks?siteId=${activeSite.id}&limit=100` : '/api/admin/ebooks?siteId=global&limit=100';
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();

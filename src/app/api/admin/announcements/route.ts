@@ -105,7 +105,11 @@ export async function GET(request: NextRequest) {
 
     const whereClause: any = {};
     if (siteId) {
-      whereClause.siteId = siteId;
+      if (siteId === 'global' || siteId === 'null') {
+        whereClause.siteId = null;
+      } else {
+        whereClause.siteId = siteId;
+      }
     }
     
     // For non-admin users, only show published announcements

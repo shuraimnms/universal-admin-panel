@@ -47,7 +47,11 @@ export async function GET(request: NextRequest) {
     } = {};
 
     if (siteId) {
-      where.siteId = siteId;
+      if (siteId === 'global' || siteId === 'null') {
+        where.siteId = null;
+      } else {
+        where.siteId = siteId;
+      }
     }
 
     if (searchTerm) {
