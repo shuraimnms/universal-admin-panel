@@ -495,6 +495,34 @@ export async function generateScopusPDF(data: PaperData): Promise<Buffer> {
     // Draw each paragraph
     setFont(pdf, false, false, FS.body);
     for (const para of paragraphs) {
+      if (para.trim().startsWith('[IMAGE:')) {
+        const match = para.match(/\[IMAGE:(data:image\/([^;]+);base64,[^\]]+)\]/);
+        if (match) {
+          const imgData = match[1];
+          let imgType = match[2].toUpperCase();
+          if (imgType === 'JPG') imgType = 'JPEG';
+          
+          try {
+            const props = pdf.getImageProperties(imgData);
+            const aspectRatio = props.width / props.height;
+            const imgWidth = COL_W;
+            const imgHeight = imgWidth / aspectRatio;
+            
+            ensureSpace(pdf, imgHeight + 4);
+            
+            const pcx = getCurrentX();
+            const pcy = getCurrentY() + 2;
+            
+            pdf.addImage(imgData, imgType, pcx, pcy, imgWidth, imgHeight);
+            
+            setCurrentY(pcy + imgHeight + 2);
+          } catch (e) {
+            console.error('Failed to add image:', e);
+          }
+        }
+        continue;
+      }
+
       const paraText = para.replace(/\n/g, ' ').trim();
       if (!paraText) continue;
 

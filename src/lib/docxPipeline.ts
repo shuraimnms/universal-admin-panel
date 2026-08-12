@@ -28,9 +28,25 @@ interface PipelineInput {
 }
 
 export async function runDocxPipeline(input: PipelineInput) {
-  // 1. Content Extractor (Mammoth)
-  const result = await mammoth.extractRawText({ buffer: input.fileBuffer });
-  const rawText = result.value;
+  // 1. Content Extractor (Mammoth) with Image Support
+  const result = await mammoth.convertToHtml({ buffer: input.fileBuffer });
+  let html = result.value;
+  
+  // Replace images with [IMAGE:...] placeholders
+  // mammoth outputs images as <img src="data:image/...;base64,..." />
+  html = html.replace(/<img[^>]+src="([^">]+)"[^>]*>/gi, '\n\n[IMAGE:$1]\n\n');
+  
+  // Strip all other HTML tags
+  let rawText = html.replace(/<[^>]+>/g, '');
+  
+  // Basic HTML entity decoding
+  rawText = rawText
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
 
   // 2. Section Classifier
   const sectionHeadings = [
@@ -88,9 +104,9 @@ export async function runDocxPipeline(input: PipelineInput) {
   }
 
   // 3. Fallback/Default metadata settings
-  const journalName = input.journalName || 'International Journal of Research in Computer Application & Management';
-  const issn = input.issn || '2455-0116';
-  const website = input.website || 'www.ijrcam.com';
+  const journalName = input.journalName || 'Global Insights';
+  const issn = input.issn || 'XXXX-XXXX';
+  const website = input.website || 'https://globalinsights.com';
   
   let volumeIssue = 'Vol. 1, Issue 1 (2026)';
   if (input.issue?.volume && input.issue?.issueNumber) {
